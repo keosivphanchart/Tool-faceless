@@ -125,6 +125,14 @@ so a missing/broken source never blocks the others.
       background per beat instead of one static background for the
       whole video; shown in the dashboard's Script library and Review
       queue so the human sees the shot-by-shot plan before approving.
+- [x] **Automatically chains into video assembly**: `POST
+      /api/pipeline/trigger/script` (what the dashboard's "Generate"
+      button calls) generates the script and then immediately assembles
+      the video for it, recording both stages on the pipeline status.
+      Per the spec, "voice and video get assembled automatically" once a
+      script exists — this isn't a separate step a human has to remember
+      to trigger from the CLI. Trend → script stays a deliberate choice
+      (you pick a topic); script → video does not.
 
 ### Module 3 — Voice generation — `built`, Kokoro requires local install
 - [x] Kokoro integration (`src/faceless_pipeline/modules/voice/kokoro_tts.py`) — install `kokoro`+`soundfile` to activate

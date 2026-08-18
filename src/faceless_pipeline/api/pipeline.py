@@ -43,16 +43,30 @@ def trigger_trend_finder(background_tasks: BackgroundTasks):
 
 @router.post("/trigger/script")
 def trigger_script_generation(topic: str, style: str = "explainer", length_variant: str = "30s", background_tasks: BackgroundTasks = None):
+    """Generates a script AND assembles the video for it, so a script
+    never just sits there — per the spec, voice/video assembly happens
+    automatically once a script exists, not as a separate manual step a
+    human has to remember to trigger. Trend -> script stays a deliberate
+    choice (this endpoint takes a topic, not "do this for every trend"),
+    but script -> video is not optional once you've decided on a topic.
+    """
     from faceless_pipeline.db import SessionLocal
     from faceless_pipeline.modules.scripts.generator import generate_script
+    from faceless_pipeline.modules.video.run import assemble_pipeline
 
     def _job():
         db = SessionLocal()
         try:
-            generate_script(db, topic=topic, style=style, length_variant=length_variant)
+            script = generate_script(db, topic=topic, style=style, length_variant=length_variant)
             record_run("script", "success", f"generated for '{topic}'")
         except Exception as exc:
             record_run("script", "error", str(exc))
+            return
+        try:
+            assemble_pipeline(db, script.id)
+            record_run("video", "success", f"assembled for '{topic}'")
+        except Exception as exc:
+            record_run("video", "error", str(exc))
         finally:
             db.close()
 
