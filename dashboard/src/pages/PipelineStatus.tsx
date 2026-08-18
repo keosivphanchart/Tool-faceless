@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { NeuButton, NeuCard } from "../components/Neu";
+import { useToast } from "../components/Toasts";
 
 export default function PipelineStatus() {
   const [stages, setStages] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const { notify } = useToast();
 
   const load = () => api.pipelineStatus().then((r) => setStages(r.stages));
 
@@ -16,7 +18,10 @@ export default function PipelineStatus() {
     setBusy(true);
     try {
       await api.triggerTrends();
+      notify("success", "Trend finder started", "Running in the background — this table refreshes automatically.");
       setTimeout(load, 1500);
+    } catch (err) {
+      notify("error", "Could not start trend finder", err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -26,8 +31,8 @@ export default function PipelineStatus() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Pipeline status</h2>
-        <NeuButton variant="primary" disabled={busy} onClick={runTrendFinder}>
-          Run trend finder now
+        <NeuButton variant="primary" loading={busy} onClick={runTrendFinder}>
+          {busy ? "Starting..." : "Run trend finder now"}
         </NeuButton>
       </div>
 

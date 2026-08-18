@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import { Loader2 } from "lucide-react";
 
 function cx(...classes: (string | false | undefined)[]) {
   return classes.filter(Boolean).join(" ");
@@ -39,12 +40,15 @@ export function NeuButton({
   variant = "neutral",
   className,
   children,
+  loading = false,
+  disabled,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof BUTTON_VARIANTS }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof BUTTON_VARIANTS; loading?: boolean }) {
   return (
     <button
       className={cx(
         "rounded-neu-sm px-4 py-2 text-sm font-medium shadow-neu-raised-sm transition-all",
+        "inline-flex items-center gap-2",
         CONVEX,
         "hover:shadow-neu-raised",
         "active:shadow-neu-pressed-sm active:from-neu-bg active:to-neu-raised active:scale-[0.98]",
@@ -52,8 +56,11 @@ export function NeuButton({
         BUTTON_VARIANTS[variant],
         className
       )}
+      disabled={disabled || loading}
+      aria-busy={loading}
       {...props}
     >
+      {loading && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
       {children}
     </button>
   );

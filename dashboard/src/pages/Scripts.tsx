@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ScriptRecord } from "../api";
 import { NeuBadge, NeuButton, NeuCard, NeuInput, NeuSelect, StoryboardStrip } from "../components/Neu";
+import { useToast } from "../components/Toasts";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState<ScriptRecord[]>([]);
@@ -8,6 +9,7 @@ export default function Scripts() {
   const [topic, setTopic] = useState("");
   const [style, setStyle] = useState("explainer");
   const [busy, setBusy] = useState(false);
+  const { notify } = useToast();
 
   const load = (q?: string) => api.listScripts(q).then(setScripts);
 
@@ -17,11 +19,19 @@ export default function Scripts() {
 
   async function generate() {
     if (!topic.trim()) return;
+    const generatingTopic = topic.trim();
     setBusy(true);
     try {
-      await api.triggerScript(topic, style);
+      await api.triggerScript(generatingTopic, style);
       setTopic("");
+      notify(
+        "success",
+        "Script generation started",
+        `"${generatingTopic}" — video assembly follows automatically once it's done.`
+      );
       setTimeout(() => load(), 1500);
+    } catch (err) {
+      notify("error", "Could not start script generation", err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -44,8 +54,8 @@ export default function Scripts() {
           <option value="story">story</option>
           <option value="hot_take">hot take</option>
         </NeuSelect>
-        <NeuButton variant="primary" disabled={busy} onClick={generate}>
-          Generate
+        <NeuButton variant="primary" loading={busy} onClick={generate}>
+          {busy ? "Starting..." : "Generate"}
         </NeuButton>
       </NeuCard>
 
