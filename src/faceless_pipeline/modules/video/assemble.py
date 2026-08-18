@@ -15,8 +15,20 @@ TARGET_HEIGHT = 1920
 
 
 def _run(cmd: list[str]) -> None:
+    """Runs an ffmpeg command with a timeout. Without one, a hung ffmpeg
+    process (corrupt input, a filter that never terminates, etc) would
+    block whichever thread is running this call forever — and since
+    Module 4 is invoked from FastAPI BackgroundTasks, that's a worker
+    thread the server needs back, not just a slow CLI call.
+    """
     logger.info("Running: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.error("ffmpeg command timed out after %ss: %s", settings.ffmpeg_timeout_seconds, cmd)
+        raise RuntimeError(f"ffmpeg timed out after {settings.ffmpeg_timeout_seconds}s") from exc
     if result.returncode != 0:
         logger.error("ffmpeg command failed: %s", result.stderr)
         raise RuntimeError(f"ffmpeg failed: {result.stderr[-2000:]}")

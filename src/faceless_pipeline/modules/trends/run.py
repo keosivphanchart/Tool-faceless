@@ -6,6 +6,7 @@ Usage:
     python -m faceless_pipeline.modules.trends.run
 """
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy.orm import Session
 
@@ -27,15 +28,46 @@ def _existing_normalized_topics(db: Session) -> set[str]:
     return {row[0] for row in db.query(Trend.normalized_topic).all()}
 
 
+def _fetch_all_sources() -> list[dict]:
+    """Each source is an independent, blocking network call (google
+    trends / youtube / reddit / tiktok / news APIs). Run sequentially,
+    the total wait is the *sum* of all five — one slow or timed-out
+    source (each has its own timeout up to 30s) delays every source
+    behind it. Each function already catches its own exceptions
+    internally and returns [] on failure, so running them concurrently
+    doesn't change error handling, just how long a caller waits for the
+    slowest one instead of all of them added together.
+
+    The fetcher list is built here, not at module import time — building
+    it once at import time would bind directly to the original function
+    objects, which breaks the standard `patch.object(module, name)` /
+    `monkeypatch.setattr(module, name, ...)` pattern this test suite uses
+    everywhere: patching the module attribute afterward wouldn't reach a
+    reference already captured in an import-time list.
+    """
+    fetchers = [
+        lambda: fetch_google_trends(settings.trend_seed_keyword_list),
+        fetch_youtube_trending,
+        fetch_reddit_trends,
+        fetch_tiktok_trends,
+        fetch_news_trends,
+    ]
+
+    candidates: list[dict] = []
+    with ThreadPoolExecutor(max_workers=len(fetchers)) as pool:
+        futures = [pool.submit(fetcher) for fetcher in fetchers]
+        for future in futures:
+            try:
+                candidates += future.result()
+            except Exception:
+                logger.exception("A trend source raised unexpectedly (should be self-contained)")
+    return candidates
+
+
 def run_trend_finder() -> list[Trend]:
     db = SessionLocal()
     try:
-        candidates: list[dict] = []
-        candidates += fetch_google_trends(settings.trend_seed_keyword_list)
-        candidates += fetch_youtube_trending()
-        candidates += fetch_reddit_trends()
-        candidates += fetch_tiktok_trends()
-        candidates += fetch_news_trends()
+        candidates = _fetch_all_sources()
 
         logger.info("Collected %d raw candidates from all sources", len(candidates))
 

@@ -22,7 +22,13 @@ def normalize_loudness(in_path: str, out_path: str, target_lufs: float = -14.0) 
         out_path,
     ]
     logger.info("Normalizing loudness: %s", " ".join(cmd))
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=settings.ffmpeg_timeout_seconds
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.error("ffmpeg loudnorm timed out after %ss", settings.ffmpeg_timeout_seconds)
+        raise RuntimeError(f"ffmpeg loudnorm timed out after {settings.ffmpeg_timeout_seconds}s") from exc
     if result.returncode != 0:
         logger.error("ffmpeg loudnorm failed: %s", result.stderr)
         raise RuntimeError(f"ffmpeg loudnorm failed: {result.stderr[-2000:]}")

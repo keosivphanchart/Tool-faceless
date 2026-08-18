@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
     ffmpeg_binary: str = "ffmpeg"
+    ffmpeg_timeout_seconds: int = 600
     output_dir: str = "./data/videos"
 
     # Module 5: Review checkpoint
