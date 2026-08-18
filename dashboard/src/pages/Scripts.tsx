@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ScriptRecord } from "../api";
+import { NeuBadge, NeuButton, NeuCard, NeuInput, NeuSelect } from "../components/Neu";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState<ScriptRecord[]>([]);
@@ -30,34 +31,26 @@ export default function Scripts() {
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Script library</h2>
 
-      <div className="flex gap-2">
-        <input
-          className="flex-1 rounded bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+      <NeuCard className="flex gap-3">
+        <NeuInput
+          className="flex-1"
           placeholder="Generate script for topic..."
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
         />
-        <select
-          className="rounded bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
-          value={style}
-          onChange={(e) => setStyle(e.target.value)}
-        >
+        <NeuSelect value={style} onChange={(e) => setStyle(e.target.value)}>
           <option value="explainer">explainer</option>
           <option value="listicle">listicle</option>
           <option value="story">story</option>
           <option value="hot_take">hot take</option>
-        </select>
-        <button
-          disabled={busy}
-          onClick={generate}
-          className="rounded bg-indigo-600 px-3 py-2 text-sm hover:bg-indigo-500 disabled:opacity-50"
-        >
+        </NeuSelect>
+        <NeuButton variant="primary" disabled={busy} onClick={generate}>
           Generate
-        </button>
-      </div>
+        </NeuButton>
+      </NeuCard>
 
-      <input
-        className="w-full rounded bg-slate-900 border border-slate-800 px-3 py-2 text-sm"
+      <NeuInput
+        className="w-full"
         placeholder="Search past scripts by topic..."
         value={search}
         onChange={(e) => {
@@ -68,18 +61,20 @@ export default function Scripts() {
 
       <div className="space-y-3">
         {scripts.map((s) => (
-          <div key={s.id} className="rounded border border-slate-800 p-3">
-            <div className="flex justify-between text-sm text-slate-400">
-              <span>{s.topic}</span>
-              <span>
-                {s.style} · {s.length_variant} · {s.status}
-              </span>
+          <NeuCard key={s.id}>
+            <div className="flex justify-between items-center text-sm text-neu-muted">
+              <span className="text-neu-text">{s.topic}</span>
+              <div className="flex gap-2">
+                <NeuBadge>{s.style}</NeuBadge>
+                <NeuBadge>{s.length_variant}</NeuBadge>
+                <NeuBadge>{s.status}</NeuBadge>
+              </div>
             </div>
-            <p className="mt-2 text-sm font-medium">{s.script.hook}</p>
-            <p className="text-sm text-slate-400">{s.script.body}</p>
-          </div>
+            <p className="mt-3 text-sm font-medium">{s.script.hook}</p>
+            <p className="text-sm text-neu-muted mt-1">{s.script.body}</p>
+          </NeuCard>
         ))}
-        {scripts.length === 0 && <p className="text-slate-500 text-sm">No scripts yet.</p>}
+        {scripts.length === 0 && <p className="text-neu-muted text-sm">No scripts yet.</p>}
       </div>
     </div>
   );

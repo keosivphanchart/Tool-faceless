@@ -6,6 +6,7 @@ import ReviewQueue from "./pages/ReviewQueue";
 import Scripts from "./pages/Scripts";
 import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
+import { NeuCard } from "./components/Neu";
 
 const NAV_ITEMS = [
   { to: "/", label: "Pipeline status" },
@@ -19,25 +20,29 @@ const NAV_ITEMS = [
 
 export default function App() {
   return (
-    <div className="min-h-screen flex">
-      <nav className="w-56 shrink-0 border-r border-slate-800 p-4 space-y-1">
-        <h1 className="text-lg font-semibold mb-4">Faceless Pipeline</h1>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/"}
-            className={({ isActive }) =>
-              `block rounded px-3 py-2 text-sm ${
-                isActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-900"
-              }`
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
+    <div className="min-h-screen flex gap-6 p-6">
+      <nav className="w-56 shrink-0">
+        <NeuCard className="space-y-1 sticky top-6">
+          <h1 className="text-base font-semibold mb-4 px-1">Faceless Pipeline</h1>
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              className={({ isActive }) =>
+                `block rounded-neu-sm px-3 py-2 text-sm transition-all ${
+                  isActive
+                    ? "shadow-neu-pressed-sm text-neu-accent"
+                    : "text-neu-muted hover:shadow-neu-raised-xs hover:text-neu-text"
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </NeuCard>
       </nav>
-      <main className="flex-1 p-6">
+      <main className="flex-1 min-w-0">
         <Routes>
           <Route path="/" element={<PipelineStatus />} />
           <Route path="/trends" element={<Trends />} />
