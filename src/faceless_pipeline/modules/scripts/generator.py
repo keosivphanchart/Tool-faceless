@@ -113,7 +113,15 @@ def _validate_storyboard(storyboard: object, script_json: dict) -> list[dict]:
     return normalized
 
 
-def _call_claude(system_prompt: str, user_prompt: str) -> dict:
+def _parse_json_response(raw_text: str, source: str) -> dict:
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        logger.error("%s response was not valid JSON: %s", source, raw_text)
+        raise ValueError(f"Script generation returned malformed JSON from {source}")
+
+
+def _call_anthropic(system_prompt: str, user_prompt: str) -> dict:
     import anthropic
 
     if not settings.anthropic_api_key:
@@ -127,12 +135,51 @@ def _call_claude(system_prompt: str, user_prompt: str) -> dict:
         messages=[{"role": "user", "content": user_prompt}],
     )
     raw_text = "".join(block.text for block in message.content if block.type == "text")
+    return _parse_json_response(raw_text, "Claude")
+
+
+def _call_ollama(system_prompt: str, user_prompt: str) -> dict:
+    """Free, local, no API key: talks to a locally-running Ollama server
+    (https://ollama.com — `ollama pull <model>` once, then `ollama serve`
+    keeps it running). Uses Ollama's /api/chat endpoint with format="json"
+    to force valid JSON output from the model, same as we require from
+    Claude. This is the alternative to a hosted API key — a one-time local
+    model download instead of a recurring per-call cost.
+    """
+    import requests
 
     try:
-        script_json = json.loads(raw_text)
-    except json.JSONDecodeError:
-        logger.error("Claude response was not valid JSON: %s", raw_text)
-        raise ValueError("Script generation returned malformed JSON from the model")
+        response = requests.post(
+            f"{settings.ollama_base_url}/api/chat",
+            json={
+                "model": settings.ollama_model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "format": "json",
+                "stream": False,
+            },
+            timeout=180,  # local generation on CPU can be slow, especially for larger models
+        )
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError as exc:
+        raise RuntimeError(
+            f"Could not reach Ollama at {settings.ollama_base_url} — is `ollama serve` running? "
+            f"Install from https://ollama.com, then `ollama pull {settings.ollama_model}`."
+        ) from exc
+
+    raw_text = response.json()["message"]["content"]
+    return _parse_json_response(raw_text, "Ollama")
+
+
+def _call_llm(system_prompt: str, user_prompt: str) -> dict:
+    if settings.script_provider == "ollama":
+        script_json = _call_ollama(system_prompt, user_prompt)
+    elif settings.script_provider == "anthropic":
+        script_json = _call_anthropic(system_prompt, user_prompt)
+    else:
+        raise RuntimeError(f"Unknown SCRIPT_PROVIDER '{settings.script_provider}' — use 'anthropic' or 'ollama'")
 
     script_json["storyboard"] = _validate_storyboard(script_json.get("storyboard"), script_json)
     return script_json
@@ -156,7 +203,7 @@ def generate_script(
         raise ValueError(f"A script already exists for topic '{topic}'. Pass allow_duplicate=True to override.")
 
     user_prompt = _build_user_prompt(topic, style, length_variant)
-    script_json = _call_claude(SYSTEM_PROMPT, user_prompt)
+    script_json = _call_llm(SYSTEM_PROMPT, user_prompt)
 
     script = Script(
         trend_id=trend_id,
@@ -187,7 +234,7 @@ def regenerate_with_feedback(db: Session, script_id: int, feedback_note: str) ->
         raise ValueError(f"Script {script_id} not found")
 
     user_prompt = _build_user_prompt(original.topic, original.style, original.length_variant, feedback_note)
-    script_json = _call_claude(SYSTEM_PROMPT, user_prompt)
+    script_json = _call_llm(SYSTEM_PROMPT, user_prompt)
 
     new_script = Script(
         trend_id=original.trend_id,

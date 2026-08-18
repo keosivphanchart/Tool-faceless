@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     tiktok_trending_country: str = "US"
 
     # Module 2: Script generator
+    script_provider: str = "anthropic"  # "anthropic" or "ollama"
     anthropic_api_key: str = ""
     script_model: str = "claude-sonnet-5"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
 
     # Module 3: Voice generation
     kokoro_voice: str = "af_heart"

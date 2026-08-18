@@ -27,15 +27,34 @@ available in a given environment — see each module's status below.
 - **ffmpeg itself**: `apt-get install ffmpeg` (or your OS's package
   manager) — free, one-time, no account.
 
-The one piece that genuinely needs an external call today is **script
-generation (Module 2)**, which uses the Claude API. There's no
-zero-network way around that — some LLM has to write the script text.
-If you don't want to use a hosted API key at all, point Module 2 at a
-local model server instead (e.g. Ollama, `llama.cpp`'s server mode)
-running on your own machine — that's a one-time local model download,
-not a recurring API key. Everything else in the pipeline runs the same
-either way, since the interface just needs "a script generation
-function," not specifically Claude.
+**Script generation (Module 2)** needs some LLM to write the script
+text — there's no zero-network way around that — but it doesn't have to
+be a paid API. Set `SCRIPT_PROVIDER=ollama` in `.env` to use a free,
+local model instead of Claude:
+
+```bash
+# one-time setup, on your own machine
+curl -fsSL https://ollama.com/install.sh | sh   # or brew install ollama
+ollama pull llama3.2                            # one-time model download, ~2GB
+ollama serve                                     # keep this running (or install as a service)
+```
+
+```bash
+# .env
+SCRIPT_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434   # default, change if Ollama runs elsewhere
+OLLAMA_MODEL=llama3.2                    # any model you've pulled
+```
+
+That's a one-time local model download, not a recurring API key or
+per-call cost. `SCRIPT_PROVIDER=anthropic` (the default) uses
+`ANTHROPIC_API_KEY` + `SCRIPT_MODEL` instead — pick whichever fits;
+everything downstream (voice, video, review, publish) runs identically
+either way since it only depends on the script JSON that comes out, not
+on which provider produced it. Every video in this pipeline can be made
+end-to-end with $0 spent and no account signups, using
+`SCRIPT_PROVIDER=ollama` + Kokoro voice + the procedural ffmpeg
+background.
 
 ## Quick start
 
@@ -109,7 +128,10 @@ to an empty list (not an error) when its key is unset or the call fails,
 so a missing/broken source never blocks the others.
 
 ### Module 2 — Script generator — `built`
-- [x] Hook / promise / body / payoff / CTA via the Claude API
+- [x] Hook / promise / body / payoff / CTA via Claude (`SCRIPT_PROVIDER=anthropic`,
+      the default) or a free local model via Ollama (`SCRIPT_PROVIDER=ollama`,
+      see the zero-API-keys section above) — same JSON contract either way,
+      dispatched by `_call_llm` in `generator.py`
 - [x] Style presets: listicle, story, explainer, hot take
 - [x] Length variants: 15s / 30s / 60s (word-count targets)
 - [x] Regenerate with feedback — edit note round-trips into a rewrite, original marked `superseded`

@@ -91,6 +91,7 @@ export const api = {
       trend_seed_keywords: string[];
       reddit_subreddits: string[];
       voice_profile: string;
+      script_provider: string;
       script_model: string;
       credentials_configured: Record<string, boolean>;
     }>("/settings"),

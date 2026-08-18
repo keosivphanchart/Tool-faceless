@@ -19,7 +19,8 @@ def settings_status():
         "trend_seed_keywords": settings.trend_seed_keyword_list,
         "reddit_subreddits": settings.reddit_subreddit_list,
         "voice_profile": settings.kokoro_voice,
-        "script_model": settings.script_model,
+        "script_provider": settings.script_provider,
+        "script_model": settings.script_model if settings.script_provider == "anthropic" else settings.ollama_model,
         "credentials_configured": {
             "youtube_api_key": bool(settings.youtube_api_key),
             "reddit_credentials": bool(settings.reddit_client_id and settings.reddit_client_secret),

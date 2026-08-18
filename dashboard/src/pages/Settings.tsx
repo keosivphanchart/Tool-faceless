@@ -46,7 +46,13 @@ export default function Settings() {
           {status.voice_profile}
         </div>
         <div>
-          <span className="text-neu-muted">Script model (SCRIPT_MODEL): </span>
+          <span className="text-neu-muted">Script provider (SCRIPT_PROVIDER): </span>
+          {status.script_provider}
+        </div>
+        <div>
+          <span className="text-neu-muted">
+            {status.script_provider === "ollama" ? "Ollama model (OLLAMA_MODEL): " : "Script model (SCRIPT_MODEL): "}
+          </span>
           {status.script_model}
         </div>
       </NeuCard>
