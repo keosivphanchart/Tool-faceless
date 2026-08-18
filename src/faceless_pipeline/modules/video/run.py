@@ -15,7 +15,7 @@ from faceless_pipeline.config import settings
 from faceless_pipeline.db import SessionLocal, init_db
 from faceless_pipeline.models import Script, Video, VideoStatus
 from faceless_pipeline.modules.video.assemble import assemble_video, build_background, generate_thumbnail
-from faceless_pipeline.modules.video.captions import generate_captions
+from faceless_pipeline.modules.video.captions import audio_duration_seconds, generate_captions
 from faceless_pipeline.modules.video.metadata import write_metadata
 from faceless_pipeline.modules.video.stock_footage import fetch_background_clips
 from faceless_pipeline.modules.voice.run import generate_voiceover, script_to_narration_text
@@ -68,7 +68,13 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
         logger.exception("Caption generation failed, continuing without burned-in captions")
         srt_path = None
 
-    estimated_duration = max(len(narration_text.split()) / 2.5, 5.0)
+    # Must be the *actual* rendered audio length, not a pre-TTS word-count
+    # estimate: assemble_video() below uses ffmpeg's -shortest, so if the
+    # background video is shorter than the real voiceover (very plausible —
+    # the dry-run placeholder is a fixed 3s regardless of script length,
+    # and real TTS cadence varies), the final render truncates the
+    # narration itself, not just the background loop.
+    target_duration = audio_duration_seconds(audio_path)
     background_path = str(out_dir / "background.mp4")
     final_path = str(out_dir / "final.mp4")
     thumbnail_path = str(out_dir / "thumbnail.jpg")
@@ -78,7 +84,7 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
         clip_paths = fetch_background_clips(_keywords_from_topic(script.topic), str(out_dir / "clips"))
         if not clip_paths:
             raise RuntimeError("no stock footage available")
-        build_background(clip_paths, estimated_duration, background_path)
+        build_background(clip_paths, target_duration, background_path)
         assemble_video(background_path, audio_path, srt_path, final_path)
         generate_thumbnail(final_path, thumbnail_path)
     except Exception:

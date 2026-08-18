@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def _audio_duration_seconds(audio_path: str) -> float:
+def audio_duration_seconds(audio_path: str) -> float:
     try:
         with wave.open(audio_path, "rb") as wav_file:
             return wav_file.getnframes() / float(wav_file.getframerate())
@@ -44,7 +44,7 @@ def transcribe_words(audio_path: str) -> list[dict]:
 
 def fallback_word_timing(script_text: str, audio_path: str) -> list[dict]:
     words = script_text.split()
-    duration = _audio_duration_seconds(audio_path)
+    duration = audio_duration_seconds(audio_path)
     if not words:
         return []
     per_word = duration / len(words)
