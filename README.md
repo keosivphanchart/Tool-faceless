@@ -230,13 +230,33 @@ so a missing/broken source never blocks the others.
 - [x] Light script-text edit before approval
 - [x] Approve triggers Module 6 publish as a background task
 - [x] Telegram / Discord webhook notification on new pending video
+- [x] **Background job failures surface in the dashboard**: approve's
+      publish job and regenerate's rewrite/reassembly job used to only
+      log exceptions server-side — nothing told a reviewer a job had
+      actually failed short of knowing to open Pipeline Status and read
+      a table. `record_run()` now appends to a bounded, pollable event
+      log (`GET /api/pipeline/events?after=<id>`) that a global toast
+      (mounted once in `App.tsx`, independent of which page is open)
+      polls every 8s and surfaces as a dismissible error toast the
+      moment it happens.
 
-### Module 6 — Publisher — `built` (YouTube), TikTok blocked on app review
+### Module 6 — Publisher — `built` (YouTube + TikTok)
 - [x] YouTube Data API `videos.insert` + OAuth (installed-app flow, token cached)
 - [x] Quota-exceeded handling (`YouTubeQuotaExceeded`)
-- [ ] TikTok Content Posting API — stubbed; **apply for API access now**, it
-      takes weeks, and the stub in `publisher/tiktok.py` is ready to fill in
-      once approved
+- [x] TikTok Content Posting API v2 direct-post flow: interactive OAuth
+      (`python -m faceless_pipeline.modules.publisher.tiktok` once, to
+      authorize and cache a token), then init → upload → poll-status per
+      publish. **Apply for TikTok API access early** — posting to any
+      account beyond your own takes weeks of app review; your own
+      developer/test account can authorize and post immediately after
+      creating a sandbox app, which is what this is built and tested
+      against. Defaults to `SELF_ONLY` privacy (visible only to the
+      posting account) so an automated run can't accidentally post
+      publicly.
+- [x] `publish_video()` auto-publishes to every platform that's actually
+      configured (YouTube always attempted; TikTok once both its app
+      credentials and a cached token exist) instead of hardcoding just
+      YouTube
 - [ ] Instagram Reels (stretch goal, not started)
 - [x] Scheduling (`scheduled_for`) — immediate publish or queue for later
 - [x] Publish history + platform video IDs stored on the `videos` row

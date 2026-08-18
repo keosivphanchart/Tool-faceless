@@ -57,6 +57,10 @@ export interface ReviewVideo {
 
 export const api = {
   pipelineStatus: () => request<{ stages: any[] }>("/pipeline/status"),
+  pipelineEvents: (after: number) =>
+    request<{ events: { id: number; stage: string; status: string; detail: string; at: string }[] }>(
+      `/pipeline/events?after=${after}`
+    ),
   triggerTrends: () => request<{ triggered: string }>("/pipeline/trigger/trends", { method: "POST" }),
   triggerScript: (topic: string, style = "explainer", length_variant = "30s") =>
     request<{ triggered: string }>(

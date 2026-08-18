@@ -1,6 +1,7 @@
 """Pipeline status + manual trigger endpoints (backs the Module 7 dashboard's
 'last run time/status per stage' view and 'run trend finder now' style buttons).
 """
+from collections import deque
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks
@@ -11,19 +12,45 @@ router = APIRouter()
 # to survive restarts or be queried historically.
 _last_runs: dict[str, dict] = {}
 
+# A bounded event log (distinct from _last_runs, which only keeps the
+# *latest* run per stage name and so clobbers itself when the same stage
+# fires for different videos — e.g. two publish failures for different
+# video_ids would otherwise overwrite each other and the dashboard would
+# only ever see the second one). Background jobs (publish, regenerate)
+# used to just log exceptions server-side with no dashboard-visible
+# trace at all; every record_run() call now also appends here so the
+# dashboard can poll for events it hasn't shown yet and surface failures
+# as they happen instead of requiring someone to know to check this page.
+_MAX_EVENTS = 200
+_events: deque[dict] = deque(maxlen=_MAX_EVENTS)
+_next_event_id = 1
+
 
 def record_run(stage: str, status: str, detail: str = ""):
-    _last_runs[stage] = {
+    global _next_event_id
+
+    entry = {
         "stage": stage,
         "status": status,
         "detail": detail,
         "at": datetime.utcnow().isoformat(),
     }
+    _last_runs[stage] = entry
+    _events.append({"id": _next_event_id, **entry})
+    _next_event_id += 1
 
 
 @router.get("/status")
 def pipeline_status():
     return {"stages": list(_last_runs.values())}
+
+
+@router.get("/events")
+def pipeline_events(after: int = 0):
+    """Polled by the dashboard's global failure toast. Returns every
+    event with id > `after` so the client only has to remember the
+    highest id it's already seen, not a timestamp or full history."""
+    return {"events": [e for e in _events if e["id"] > after]}
 
 
 @router.post("/trigger/trends")

@@ -17,6 +17,7 @@ import Scripts from "./pages/Scripts";
 import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
 import { NeuCard, NeuIcon } from "./components/Neu";
+import { FailureToasts } from "./components/FailureToasts";
 
 const NAV_ITEMS = [
   { to: "/", label: "Pipeline status", icon: Activity },
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
+      <FailureToasts />
     </div>
   );
 }

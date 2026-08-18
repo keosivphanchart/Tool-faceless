@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     youtube_token_file: str = "./secrets/youtube_token.json"
     tiktok_client_key: str = ""
     tiktok_client_secret: str = ""
+    tiktok_api_base_url: str = "https://open.tiktokapis.com"
+    tiktok_token_file: str = "./secrets/tiktok_token.json"
+    tiktok_redirect_uri: str = "http://localhost:8765/tiktok/callback"
+    tiktok_default_privacy_level: str = "SELF_ONLY"  # safest default: visible only to the posting account
 
     # Module 8: Analytics
     youtube_analytics_token_file: str = "./secrets/youtube_analytics_token.json"

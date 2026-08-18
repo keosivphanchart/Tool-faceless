@@ -8,8 +8,9 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from faceless_pipeline.config import settings
 from faceless_pipeline.models import Video, VideoStatus
-from faceless_pipeline.modules.publisher.tiktok import TikTokNotConfigured
+from faceless_pipeline.modules.publisher.tiktok import TikTokNotConfigured, TikTokPublishFailed
 from faceless_pipeline.modules.publisher.tiktok import upload_video as tiktok_upload
 from faceless_pipeline.modules.publisher.youtube import YouTubeQuotaExceeded
 from faceless_pipeline.modules.publisher.youtube import upload_video as youtube_upload
@@ -22,6 +23,21 @@ def _load_metadata(video: Video) -> dict:
     if video.metadata_path and Path(video.metadata_path).exists():
         return json.loads(Path(video.metadata_path).read_text(encoding="utf-8"))
     return {"title": video.script.topic, "description": "", "tags": []}
+
+
+def _default_platforms() -> list[str]:
+    """Auto-publish to whatever's actually set up, instead of hardcoding
+    just YouTube — TikTok is a real upload path now, not a stub, so an
+    approved video should go to every platform this pipeline is
+    authorized for. YouTube is attempted unconditionally since its OAuth
+    flow prompts for setup on first use; TikTok is only attempted once
+    both its app credentials and a cached user token exist, so a video
+    isn't blocked on an interactive `authorize()` step nobody's run yet.
+    """
+    platforms = ["youtube"]
+    if settings.tiktok_client_key and settings.tiktok_client_secret and Path(settings.tiktok_token_file).exists():
+        platforms.append("tiktok")
+    return platforms
 
 
 def publish_video(db: Session, video_id: int, platforms: list[str] | None = None, scheduled_for: datetime | None = None) -> Video:
@@ -39,7 +55,7 @@ def publish_video(db: Session, video_id: int, platforms: list[str] | None = None
         logger.info("Video %s queued for %s (dispatch it again at that time)", video_id, scheduled_for)
         return video
 
-    platforms = platforms or ["youtube"]
+    platforms = platforms or _default_platforms()
     metadata = _load_metadata(video)
     platform_ids = dict(video.platform_ids or {})
 

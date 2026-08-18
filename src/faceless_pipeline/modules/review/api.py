@@ -77,13 +77,24 @@ def approve_video(video_id: int, background_tasks: BackgroundTasks, db: Session 
     db.commit()
 
     def _publish_job():
+        from faceless_pipeline.api.pipeline import record_run
         from faceless_pipeline.db import SessionLocal
         from faceless_pipeline.modules.publisher.run import publish_video
 
         session = SessionLocal()
         try:
-            publish_video(session, video_id)
-        except Exception:
+            published = publish_video(session, video_id)
+            if published.platform_ids:
+                platforms = ", ".join(str(p) for p in published.platform_ids)
+                record_run("publish", "success", f"video {video_id} -> {platforms}")
+            else:
+                # publish_video() itself swallows per-platform failures so
+                # one bad platform doesn't block the others - if nothing
+                # published, that's the dashboard-visible signal something
+                # needs attention (check server logs for which platform).
+                record_run("publish", "error", f"video {video_id}: no platform accepted the upload")
+        except Exception as exc:
+            record_run("publish", "error", f"video {video_id}: {exc}")
             import logging
 
             logging.getLogger(__name__).exception("Auto-publish after approval failed for video %s", video_id)
@@ -133,6 +144,7 @@ def regenerate_video(video_id: int, req: RegenerateRequest, background_tasks: Ba
     db.commit()
 
     def _regenerate_job():
+        from faceless_pipeline.api.pipeline import record_run
         from faceless_pipeline.db import SessionLocal
 
         session = SessionLocal()
@@ -147,7 +159,9 @@ def regenerate_video(video_id: int, req: RegenerateRequest, background_tasks: Ba
             from faceless_pipeline.modules.video.run import assemble_pipeline
 
             assemble_pipeline(session, target_script_id)
-        except Exception:
+            record_run("regenerate", "success", f"video {video_id} (target={req.target}) regenerated")
+        except Exception as exc:
+            record_run("regenerate", "error", f"video {video_id} (target={req.target}): {exc}")
             import logging
 
             logging.getLogger(__name__).exception(
