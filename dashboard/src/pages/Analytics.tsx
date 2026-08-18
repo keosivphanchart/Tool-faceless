@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { NeuCard } from "../components/Neu";
+import { NeuCard, NeuProgress } from "../components/Neu";
 
 export default function Analytics() {
   const [best, setBest] = useState<{ by_style: any[]; by_topic: any[] }>({ by_style: [], by_topic: [] });
@@ -74,7 +74,12 @@ export default function Analytics() {
                 <td className="py-2">#{p.video_id}</td>
                 <td>{p.platform}</td>
                 <td>{p.views}</td>
-                <td>{p.retention_pct.toFixed(1)}%</td>
+                <td className="w-40">
+                  <div className="flex items-center gap-2">
+                    <NeuProgress value={p.retention_pct} />
+                    <span className="shrink-0 text-xs text-neu-muted">{p.retention_pct.toFixed(1)}%</span>
+                  </div>
+                </td>
                 <td className="text-neu-muted">{new Date(p.pulled_at).toLocaleDateString()}</td>
               </tr>
             ))}

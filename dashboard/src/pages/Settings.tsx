@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { NeuBadge, NeuCard } from "../components/Neu";
+import { NeuBadge, NeuCard, NeuToggle } from "../components/Neu";
 
 export default function Settings() {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof api.settingsStatus>> | null>(null);
@@ -64,8 +64,8 @@ export default function Settings() {
             {Object.entries(status.credentials_configured).map(([key, configured]) => (
               <tr key={key}>
                 <td className="py-2">{key}</td>
-                <td className={configured ? "text-neu-success" : "text-neu-danger"}>
-                  {configured ? "configured" : "missing"}
+                <td className="py-2">
+                  <NeuToggle on={configured} label={configured ? "configured" : "missing"} />
                 </td>
               </tr>
             ))}
