@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import get_db
@@ -14,6 +14,20 @@ router = APIRouter()
 class PublishRequest(BaseModel):
     platforms: list[str] = ["youtube"]
     scheduled_for: datetime | None = None
+
+    @field_validator("scheduled_for")
+    @classmethod
+    def _normalize_to_naive_utc(cls, value: datetime | None) -> datetime | None:
+        # Every other datetime in this codebase (Trend.created_at,
+        # Performance.pulled_at, and datetime.utcnow() itself — used by
+        # the scheduler loop to check whether a schedule is due) is
+        # naive UTC. A timezone-aware value here (e.g. a client sending
+        # `.toISOString()`) would otherwise raise TypeError the moment
+        # it's compared against a naive datetime.utcnow(), or get stored
+        # inconsistently. Normalize once at the API boundary instead.
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
 
 
 @router.get("/history")

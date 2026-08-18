@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import {
   Activity,
+  CalendarClock,
   CheckCircle2,
   FileText,
   Flame,
@@ -13,6 +14,7 @@ import Analytics from "./pages/Analytics";
 import PipelineStatus from "./pages/PipelineStatus";
 import PublishHistory from "./pages/PublishHistory";
 import ReviewQueue from "./pages/ReviewQueue";
+import Scheduled from "./pages/Scheduled";
 import Scripts from "./pages/Scripts";
 import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
@@ -24,6 +26,7 @@ const NAV_ITEMS = [
   { to: "/trends", label: "Trends", icon: Flame },
   { to: "/scripts", label: "Scripts", icon: FileText },
   { to: "/review", label: "Review queue", icon: CheckCircle2 },
+  { to: "/scheduled", label: "Scheduled", icon: CalendarClock },
   { to: "/publish-history", label: "Publish history", icon: Send },
   { to: "/analytics", label: "Analytics", icon: LineChart },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
@@ -75,6 +78,7 @@ export default function App() {
             <Route path="/trends" element={<Trends />} />
             <Route path="/scripts" element={<Scripts />} />
             <Route path="/review" element={<ReviewQueue />} />
+            <Route path="/scheduled" element={<Scheduled />} />
             <Route path="/publish-history" element={<PublishHistory />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />

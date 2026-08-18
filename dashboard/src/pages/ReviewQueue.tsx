@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { api, ReviewVideo } from "../api";
-import { NeuButton, NeuCard, NeuTextarea, StoryboardStrip } from "../components/Neu";
+import { NeuButton, NeuCard, NeuInput, NeuTextarea, StoryboardStrip } from "../components/Neu";
 import { useToast } from "../components/Toasts";
 
-type Action = "approve" | "reject" | "regenerate-script" | "regenerate-video";
+type Action = "approve" | "schedule" | "reject" | "regenerate-script" | "regenerate-video";
 
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
+  const [scheduleAt, setScheduleAt] = useState<Record<number, string>>({});
   const [regenerating, setRegenerating] = useState<Set<number>>(new Set());
   const [actionBusy, setActionBusy] = useState<Record<number, Action | undefined>>({});
   const { notify } = useToast();
@@ -34,6 +35,30 @@ export default function ReviewQueue() {
       load();
     } catch (err) {
       notify("error", "Approve failed", errorMessage(err));
+    } finally {
+      setBusy(id, undefined);
+    }
+  }
+
+  async function schedule(id: number) {
+    const localValue = scheduleAt[id];
+    if (!localValue) {
+      notify("error", "Pick a date/time first", "Choose when this video should publish, then hit Schedule.");
+      return;
+    }
+    const iso = new Date(localValue).toISOString();
+
+    setBusy(id, "schedule");
+    try {
+      await api.approveVideo(id, iso);
+      notify(
+        "success",
+        "Publish scheduled",
+        `Will publish automatically at ${new Date(localValue).toLocaleString()} — see it under Scheduled.`
+      );
+      load();
+    } catch (err) {
+      notify("error", "Could not schedule", errorMessage(err));
     } finally {
       setBusy(id, undefined);
     }
@@ -155,9 +180,19 @@ export default function ReviewQueue() {
               onChange={(e) => setNote({ ...note, [v.id]: e.target.value })}
             />
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <NeuButton variant="success" disabled={!!busy} loading={busy === "approve"} onClick={() => approve(v.id)}>
-                {busy === "approve" ? "Approving..." : "Approve"}
+                {busy === "approve" ? "Approving..." : "Approve now"}
+              </NeuButton>
+              <NeuInput
+                type="datetime-local"
+                className="text-xs"
+                value={scheduleAt[v.id] || ""}
+                onChange={(e) => setScheduleAt({ ...scheduleAt, [v.id]: e.target.value })}
+                min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+              />
+              <NeuButton disabled={!!busy} loading={busy === "schedule"} onClick={() => schedule(v.id)}>
+                {busy === "schedule" ? "Scheduling..." : "Schedule"}
               </NeuButton>
               <NeuButton variant="danger" disabled={!!busy} loading={busy === "reject"} onClick={() => reject(v.id)}>
                 {busy === "reject" ? "Rejecting..." : "Reject"}

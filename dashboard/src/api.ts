@@ -51,6 +51,7 @@ export interface ReviewVideo {
   status: string;
   file_path: string | null;
   thumbnail_path: string | null;
+  scheduled_for: string | null;
   script: { id: number; topic: string; style: string; length_variant: string; text: ScriptRecord["script"] };
   created_at: string;
 }
@@ -73,9 +74,19 @@ export const api = {
   listScripts: (topic?: string) => request<ScriptRecord[]>(`/scripts${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
 
   listPendingVideos: () => request<ReviewVideo[]>("/videos?status=pending"),
-  approveVideo: (id: number) => request(`/videos/${id}/approve`, { method: "POST" }),
+  // scheduledFor: an ISO datetime string in the future — publish_video()
+  // then just stores it and returns instead of publishing immediately;
+  // the scheduler loop (started from main.py's lifespan) picks it up
+  // once that time arrives.
+  approveVideo: (id: number, scheduledFor?: string) =>
+    request(`/videos/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ scheduled_for: scheduledFor || null }),
+    }),
   rejectVideo: (id: number, note?: string) =>
     request(`/videos/${id}/reject`, { method: "POST", body: JSON.stringify({ note }) }),
+  listScheduled: () => request<ReviewVideo[]>("/videos/scheduled/upcoming"),
+  unscheduleVideo: (id: number) => request<ReviewVideo>(`/videos/${id}/unschedule`, { method: "POST" }),
   // The rewrite/reassembly runs as a background job on the server, so
   // this only confirms the job was queued — new_script_id/new_video_id
   // aren't known yet at response time.

@@ -1,14 +1,34 @@
 """Module 5: Review checkpoint. The one place a human touches the
 pipeline before anything goes public.
 """
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import get_db
 from faceless_pipeline.models import Script, Video, VideoStatus
 
 router = APIRouter()
+
+
+class ApproveRequest(BaseModel):
+    scheduled_for: datetime | None = None
+
+    @field_validator("scheduled_for")
+    @classmethod
+    def _normalize_to_naive_utc(cls, value: datetime | None) -> datetime | None:
+        # The dashboard sends `new Date(...).toISOString()`, which is
+        # timezone-aware (a "Z" offset) — but every other datetime in
+        # this codebase (Trend.created_at, Performance.pulled_at, and
+        # datetime.utcnow() itself, used to check whether a schedule is
+        # due) is naive UTC. Comparing an aware and a naive datetime
+        # raises TypeError, so normalize once here rather than at every
+        # comparison site downstream.
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
 
 
 class RejectRequest(BaseModel):
@@ -38,6 +58,7 @@ def _serialize(video: Video) -> dict:
         "captions_path": video.captions_path,
         "metadata_path": video.metadata_path,
         "review_note": video.review_note,
+        "scheduled_for": video.scheduled_for,
         "created_at": video.created_at,
         "script": {
             "id": video.script.id,
@@ -59,6 +80,38 @@ def list_videos(status: str | None = "pending", db: Session = Depends(get_db)):
     return [_serialize(v) for v in query.all()]
 
 
+@router.get("/scheduled/upcoming")
+def list_scheduled(db: Session = Depends(get_db)):
+    """Approved videos waiting on a future scheduled_for — the only place
+    a scheduled video is visible after it leaves the pending review
+    queue and before it actually publishes, since list_videos(status=...)
+    only ever shows one status at a time."""
+    videos = (
+        db.query(Video)
+        .options(joinedload(Video.script))
+        .filter(Video.status == VideoStatus.approved, Video.scheduled_for.isnot(None))
+        .order_by(Video.scheduled_for.asc())
+        .all()
+    )
+    return [_serialize(v) for v in videos]
+
+
+@router.post("/{video_id}/unschedule")
+def unschedule_video(video_id: int, db: Session = Depends(get_db)):
+    """Cancels a pending schedule without touching review status — the
+    video stays approved (so it can be published immediately or given a
+    new schedule), it just won't be picked up by the scheduler loop."""
+    video = db.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.scheduled_for is None:
+        raise HTTPException(status_code=400, detail="Video has no pending schedule")
+
+    video.scheduled_for = None
+    db.commit()
+    return _serialize(video)
+
+
 @router.get("/{video_id}")
 def get_video(video_id: int, db: Session = Depends(get_db)):
     video = db.query(Video).options(joinedload(Video.script)).filter(Video.id == video_id).first()
@@ -68,10 +121,17 @@ def get_video(video_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{video_id}/approve")
-def approve_video(video_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def approve_video(
+    video_id: int,
+    background_tasks: BackgroundTasks,
+    req: ApproveRequest = ApproveRequest(),
+    db: Session = Depends(get_db),
+):
     video = db.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    if req.scheduled_for and req.scheduled_for <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="scheduled_for must be in the future")
 
     video.status = VideoStatus.approved
     db.commit()
@@ -83,8 +143,14 @@ def approve_video(video_id: int, background_tasks: BackgroundTasks, db: Session 
 
         session = SessionLocal()
         try:
-            published = publish_video(session, video_id)
-            if published.platform_ids:
+            published = publish_video(session, video_id, scheduled_for=req.scheduled_for)
+            if req.scheduled_for:
+                # publish_video() just stores scheduled_for and returns
+                # for a future timestamp - the scheduler loop (started
+                # from main.py's lifespan) is what actually publishes it
+                # once that time arrives.
+                record_run("publish", "success", f"video {video_id} scheduled for {req.scheduled_for.isoformat()}")
+            elif published.platform_ids:
                 platforms = ", ".join(str(p) for p in published.platform_ids)
                 record_run("publish", "success", f"video {video_id} -> {platforms}")
             else:

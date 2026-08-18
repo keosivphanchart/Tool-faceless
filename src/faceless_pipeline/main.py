@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -8,12 +9,15 @@ from fastapi.responses import FileResponse
 from faceless_pipeline.api.router import api_router
 from faceless_pipeline.config import settings
 from faceless_pipeline.db import init_db
+from faceless_pipeline.modules.publisher.scheduler import run_scheduler_loop
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    scheduler_task = asyncio.create_task(run_scheduler_loop())
     yield
+    scheduler_task.cancel()
 
 
 app = FastAPI(title="Faceless Content Pipeline", version="0.1.0", lifespan=lifespan)

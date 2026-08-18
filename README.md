@@ -258,7 +258,17 @@ so a missing/broken source never blocks the others.
       credentials and a cached token exist) instead of hardcoding just
       YouTube
 - [ ] Instagram Reels (stretch goal, not started)
-- [x] Scheduling (`scheduled_for`) — immediate publish or queue for later
+- [x] Scheduling — pick a future publish time from the Review queue
+      (or approve immediately, the default) instead of always publishing
+      right away. A background dispatcher (`publisher/scheduler.py`,
+      started from `main.py`'s lifespan, checks every 60s) actually
+      publishes each video once its scheduled time arrives — this used
+      to be a dead end where `scheduled_for` was stored and nothing ever
+      came back to act on it. A failed scheduled publish stays approved
+      with its schedule time still in the past, so the next tick retries
+      it automatically. Manage upcoming/cancel from the dashboard's
+      Scheduled page (`GET/POST /api/videos/scheduled/upcoming`,
+      `/api/videos/{id}/unschedule`).
 - [x] Publish history + platform video IDs stored on the `videos` row
 
 ### Module 7 — Dashboard — `built`, verified end-to-end against a real backend
