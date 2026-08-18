@@ -22,7 +22,7 @@ class Trend(Base):
     normalized_topic: Mapped[str] = mapped_column(String(500), index=True)
     source: Mapped[str] = mapped_column(String(50))  # google_trends | youtube | reddit
     score: Mapped[float] = mapped_column(Float, default=0.0)
-    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    used: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     scripts: Mapped[list["Script"]] = relationship(back_populates="trend")
@@ -33,11 +33,11 @@ class Script(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     trend_id: Mapped[int | None] = mapped_column(ForeignKey("trends.id"), nullable=True)
-    topic: Mapped[str] = mapped_column(String(500))
+    topic: Mapped[str] = mapped_column(String(500), index=True)
     script: Mapped[dict] = mapped_column(JSON)  # {hook, promise, body, payoff, cta}
     style: Mapped[str] = mapped_column(String(50), default="explainer")
     length_variant: Mapped[str] = mapped_column(String(10), default="30s")
-    status: Mapped[str] = mapped_column(String(20), default="draft")
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     feedback_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_script_id: Mapped[int | None] = mapped_column(ForeignKey("scripts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -50,14 +50,14 @@ class Video(Base):
     __tablename__ = "videos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    script_id: Mapped[int] = mapped_column(ForeignKey("scripts.id"))
+    script_id: Mapped[int] = mapped_column(ForeignKey("scripts.id"), index=True)
     file_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     captions_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     metadata_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[str] = mapped_column(
-        Enum(VideoStatus, native_enum=False), default=VideoStatus.pending
+        Enum(VideoStatus, native_enum=False), default=VideoStatus.pending, index=True
     )
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     platform_ids: Mapped[dict] = mapped_column(JSON, default=dict)  # {"youtube": "...", "tiktok": "..."}
@@ -72,7 +72,7 @@ class Performance(Base):
     __tablename__ = "performance"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    video_id: Mapped[int] = mapped_column(ForeignKey("videos.id"))
+    video_id: Mapped[int] = mapped_column(ForeignKey("videos.id"), index=True)
     platform: Mapped[str] = mapped_column(String(50))
     views: Mapped[int] = mapped_column(Integer, default=0)
     retention_pct: Mapped[float] = mapped_column(Float, default=0.0)

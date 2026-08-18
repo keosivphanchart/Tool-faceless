@@ -57,8 +57,14 @@ export const api = {
   approveVideo: (id: number) => request(`/videos/${id}/approve`, { method: "POST" }),
   rejectVideo: (id: number, note?: string) =>
     request(`/videos/${id}/reject`, { method: "POST", body: JSON.stringify({ note }) }),
+  // The rewrite/reassembly runs as a background job on the server, so
+  // this only confirms the job was queued — new_script_id/new_video_id
+  // aren't known yet at response time.
   regenerateVideo: (id: number, target: "script" | "video", note: string) =>
-    request(`/videos/${id}/regenerate`, { method: "POST", body: JSON.stringify({ target, note }) }),
+    request<{ regenerating: string; status: string; video_id: number }>(
+      `/videos/${id}/regenerate`,
+      { method: "POST", body: JSON.stringify({ target, note }) }
+    ),
 
   publishHistory: () => request<any[]>("/publish/history"),
 

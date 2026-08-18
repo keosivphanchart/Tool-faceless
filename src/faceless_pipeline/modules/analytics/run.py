@@ -7,7 +7,7 @@ Usage:
 """
 import logging
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import SessionLocal, init_db
 from faceless_pipeline.models import Performance, Video, VideoStatus
@@ -53,9 +53,13 @@ def best_performing_patterns(db: Session, top_n: int = 5) -> dict:
     average views across the most recent performance pull per video."""
     import pandas as pd
 
+    # joinedload(Video.script) avoids an N+1: without it, the .style/.topic
+    # access in the list comprehension below fires one extra SELECT per
+    # performance row.
     rows = (
         db.query(Performance, Video)
         .join(Video, Performance.video_id == Video.id)
+        .options(joinedload(Video.script))
         .all()
     )
     if not rows:

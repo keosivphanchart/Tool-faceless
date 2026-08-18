@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import get_db
 from faceless_pipeline.models import Video, VideoStatus
@@ -18,7 +18,13 @@ class PublishRequest(BaseModel):
 
 @router.get("/history")
 def publish_history(db: Session = Depends(get_db)):
-    videos = db.query(Video).filter(Video.status == VideoStatus.published).order_by(Video.created_at.desc()).all()
+    videos = (
+        db.query(Video)
+        .options(joinedload(Video.script))
+        .filter(Video.status == VideoStatus.published)
+        .order_by(Video.created_at.desc())
+        .all()
+    )
     return [
         {
             "id": v.id,

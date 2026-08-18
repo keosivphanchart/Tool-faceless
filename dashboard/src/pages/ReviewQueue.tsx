@@ -4,6 +4,7 @@ import { api, ReviewVideo } from "../api";
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
+  const [regenerating, setRegenerating] = useState<Set<number>>(new Set());
 
   const load = () => api.listPendingVideos().then(setVideos);
 
@@ -26,13 +27,44 @@ export default function ReviewQueue() {
       alert("Add a feedback note before regenerating.");
       return;
     }
+    // The rewrite (Claude) and/or reassembly (TTS + ffmpeg) run as a
+    // background job on the server, so the response comes back before the
+    // new script/video exists. Drop the rejected item immediately, then
+    // poll for a bit so the replacement shows up once it's ready instead
+    // of requiring a manual refresh.
     await api.regenerateVideo(id, target, note[id]);
+    setRegenerating((prev) => new Set(prev).add(id));
     load();
+
+    const previousIds = new Set(videos.map((v) => v.id));
+    let attempts = 0;
+    const poll = async () => {
+      attempts += 1;
+      const fresh = await api.listPendingVideos();
+      setVideos(fresh);
+      const hasNewItem = fresh.some((v) => !previousIds.has(v.id));
+      if (hasNewItem || attempts >= 10) {
+        setRegenerating((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        return;
+      }
+      setTimeout(poll, 3000);
+    };
+    setTimeout(poll, 3000);
   }
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Review queue ({videos.length} pending)</h2>
+      {regenerating.size > 0 && (
+        <p className="text-xs text-slate-500">
+          Regenerating {regenerating.size} item{regenerating.size > 1 ? "s" : ""} in the background — the
+          rewrite/reassembly can take a while, this will refresh automatically.
+        </p>
+      )}
 
       {videos.map((v) => (
         <div key={v.id} className="rounded border border-slate-800 p-4 space-y-3">
