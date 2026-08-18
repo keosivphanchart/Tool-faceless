@@ -23,7 +23,9 @@ export default function App() {
     <div className="min-h-screen flex gap-6 p-6">
       <nav className="w-56 shrink-0">
         <NeuCard className="space-y-1 sticky top-6">
-          <h1 className="text-base font-semibold mb-4 px-1">Faceless Pipeline</h1>
+          <h1 className="text-base font-semibold mb-4 px-1 flex items-center gap-2">
+            <span aria-hidden="true">🦫</span> Faceless Pipeline
+          </h1>
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}

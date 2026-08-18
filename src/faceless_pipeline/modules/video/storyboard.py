@@ -37,26 +37,48 @@ MIN_SEGMENT_SECONDS = 0.15
 
 
 def compute_beat_timing(script_json: dict, words: list[dict]) -> list[dict]:
-    """Maps each storyboard beat to a (start, end) slice of the
-    word-level timestamps, by counting words per beat in the same fixed
-    order voice.run.script_to_narration_text() concatenates them in.
+    """Maps each storyboard beat to a (start, end) slice of the real
+    narration audio, by giving each beat the same proportion of the total
+    duration that its word count is of the total written word count.
+
+    This is proportional, not a literal per-word index slice, because
+    `words` isn't guaranteed to have the same count as the written
+    script: the primary path transcribes the *rendered audio* with
+    faster-whisper, and real ASR output routinely has a different word
+    count than a plain .split() of the source text (numbers/abbreviations
+    spoken and heard differently, filler words, merged/dropped tokens).
+    An index-based slice silently ran out of words on drift like that and
+    dropped the trailing beats from the storyboard entirely - meaning
+    their background segments never got built, so the concatenated
+    background ended before the narration did and ffmpeg's -shortest in
+    assemble_video() truncated the real audio. Allocating by proportion
+    of the known total duration instead always covers every beat and
+    always sums to exactly the real audio span, regardless of transcript
+    word-count drift.
     Returns [{"beat": ..., "start": float, "end": float}, ...].
     """
     if not words:
         return []
 
+    total_start = words[0]["start"]
+    total_duration = words[-1]["end"] - total_start
+    if total_duration <= 0:
+        return []
+
+    beat_word_counts = [(beat, len(str(script_json.get(beat, "")).split())) for beat in STORYBOARD_BEATS]
+    total_words = sum(count for _, count in beat_word_counts)
+    if total_words == 0:
+        return []
+
     timing = []
-    cursor = 0
-    for beat in STORYBOARD_BEATS:
-        beat_text = str(script_json.get(beat, "")).strip()
-        word_count = len(beat_text.split())
+    words_so_far = 0
+    for beat, word_count in beat_word_counts:
         if word_count == 0:
             continue
-        segment_words = words[cursor : cursor + word_count]
-        if not segment_words:
-            break
-        timing.append({"beat": beat, "start": segment_words[0]["start"], "end": segment_words[-1]["end"]})
-        cursor += word_count
+        start = total_start + (words_so_far / total_words) * total_duration
+        words_so_far += word_count
+        end = total_start + (words_so_far / total_words) * total_duration
+        timing.append({"beat": beat, "start": start, "end": end})
 
     return timing
 
