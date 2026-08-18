@@ -114,12 +114,17 @@ def regenerate_video(video_id: int, req: RegenerateRequest, db: Session = Depend
 
     if req.target == "script":
         from faceless_pipeline.modules.scripts.generator import regenerate_with_feedback
+        from faceless_pipeline.modules.video.run import assemble_pipeline
 
         new_script = regenerate_with_feedback(db, video.script_id, req.note)
         video.status = VideoStatus.rejected
         video.review_note = f"Sent back for script rewrite: {req.note}"
         db.commit()
-        return {"regenerated": "script", "new_script_id": new_script.id}
+        # Also re-assemble the video against the rewritten script, so a
+        # rewrite lands back in the review queue like a video regenerate
+        # does, instead of leaving the new script with nothing to review.
+        new_video = assemble_pipeline(db, new_script.id)
+        return {"regenerated": "script", "new_script_id": new_script.id, "new_video_id": new_video.id}
 
     if req.target == "video":
         from faceless_pipeline.modules.video.run import assemble_pipeline
@@ -127,7 +132,7 @@ def regenerate_video(video_id: int, req: RegenerateRequest, db: Session = Depend
         video.status = VideoStatus.rejected
         video.review_note = f"Sent back for re-assembly: {req.note}"
         db.commit()
-        new_video = assemble_pipeline(video.script_id)
+        new_video = assemble_pipeline(db, video.script_id)
         return {"regenerated": "video", "new_video_id": new_video.id}
 
     raise HTTPException(status_code=400, detail="target must be 'script' or 'video'")
