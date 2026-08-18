@@ -284,6 +284,15 @@ review queue's video player pulls real bytes through `/media`, and
 clicking Approve / Regenerate through the actual UI hits the real API
 and settles into the right state with zero console errors.
 
+Two selectable visual themes, toggled from the sidebar and persisted to
+`localStorage` — every `bg-neu-*`/`shadow-neu-*` class resolves through
+CSS custom properties (`index.css`), so switching just flips a
+`data-theme` attribute on `<html>` with no per-component changes:
+- **Capybara** (default) — warm sandy-tan neumorphism, mikan-orange accent.
+- **Retro Futuristic** — dark arcade/synthwave palette (neon magenta
+  accent, neon-green success), an Orbitron display face for headings, a
+  monospace body font, and a faint CRT scanline overlay.
+
 ### Module 8 — Analytics feedback loop — `built` (YouTube), TikTok blocked on same review
 - [x] Weekly job pulls YouTube Analytics (`reports.query`) per published video
 - [ ] TikTok reporting API — stubbed, same app-review blocker as Module 6

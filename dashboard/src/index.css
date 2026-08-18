@@ -1,3 +1,87 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Share+Tech+Mono&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* "Capybara" (default) — warm sandy tan, mikan-orange accent. RGB
+   channels (not hex) so Tailwind's opacity modifiers (e.g. `/60`) work
+   against these as CSS-variable colors — see tailwind.config.js. */
+:root {
+  --neu-bg: 239 223 192;
+  --neu-surface: 239 223 192;
+  --neu-raised: 247 237 214;
+  --neu-shadow-dark: 205 169 113;
+  --neu-shadow-light: 255 252 242;
+  --neu-text: 74 46 27;
+  --neu-muted: 139 107 71;
+  --neu-accent: 232 117 44;
+  --neu-accent-muted: 242 166 90;
+  --neu-success: 94 143 46;
+  --neu-danger: 193 68 14;
+  --neu-warn: 217 166 46;
+  --neu-font-display: system-ui, "Segoe UI", sans-serif;
+  --neu-font-body: system-ui, "Segoe UI", sans-serif;
+}
+
+/* "Retro Futuristic" — dark arcade-cabinet base with a neon synthwave
+   palette (magenta accent, neon green success, electric-blue-tinted
+   shadows), an Orbitron display face for headings, and a CRT scanline
+   overlay (below) for the "old technology, imagined future" texture the
+   style is built on. Toggled by setting data-theme="retro" on <html>
+   (see components/ThemeToggle.tsx) — every component already styled
+   with `bg-neu-*` / `shadow-neu-*` re-themes automatically since those
+   classes resolve through these custom properties. */
+[data-theme="retro"] {
+  --neu-bg: 11 14 26;
+  --neu-surface: 11 14 26;
+  --neu-raised: 20 24 43;
+  --neu-shadow-dark: 5 6 13;
+  --neu-shadow-light: 35 43 82;
+  --neu-text: 214 251 255;
+  --neu-muted: 110 123 153;
+  --neu-accent: 255 42 109;
+  --neu-accent-muted: 255 110 168;
+  --neu-success: 57 255 136;
+  --neu-danger: 255 56 96;
+  --neu-warn: 255 217 61;
+  --neu-font-display: "Orbitron", system-ui, sans-serif;
+  --neu-font-body: "Share Tech Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--neu-font-body);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--neu-font-display);
+}
+
+[data-theme="retro"] h1,
+[data-theme="retro"] h2,
+[data-theme="retro"] h3 {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* CRT scanlines — fixed, full-viewport, purely decorative (inert to
+   clicks) so it sits over every page without touching layout. Kept
+   faint (2% line opacity) so body text stays readable; only rendered at
+   all in retro mode. */
+[data-theme="retro"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0) 0px,
+    rgb(0 0 0 / 0) 2px,
+    rgb(0 255 255 / 0.025) 3px,
+    rgb(0 0 0 / 0) 4px
+  );
+}

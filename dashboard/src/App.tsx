@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
 import { NeuCard, NeuIcon } from "./components/Neu";
 import { ToastProvider } from "./components/Toasts";
+import { ThemeToggle } from "./components/ThemeToggle";
 
 const NAV_ITEMS = [
   { to: "/", label: "Pipeline status", icon: Activity },
@@ -70,6 +71,9 @@ export default function App() {
                 </NavLink>
               );
             })}
+            <div className="pt-3">
+              <ThemeToggle />
+            </div>
           </NeuCard>
         </nav>
         <main className="flex-1 min-w-0">
