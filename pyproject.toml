@@ -24,6 +24,7 @@ trends = [
     "google-api-python-client==2.147.0",
     "praw==7.7.1",
     "rapidfuzz==3.9.7",
+    "numpy>=1.26,<3",  # required by rapidfuzz.process.cdist's return type
 ]
 scripts = ["anthropic==0.34.2"]
 voice = [
