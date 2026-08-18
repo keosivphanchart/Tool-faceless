@@ -14,7 +14,7 @@ TARGET_WIDTH = 1080
 TARGET_HEIGHT = 1920
 
 
-def _run(cmd: list[str]) -> None:
+def run_ffmpeg(cmd: list[str]) -> None:
     """Runs an ffmpeg command with a timeout. Without one, a hung ffmpeg
     process (corrupt input, a filter that never terminates, etc) would
     block whichever thread is running this call forever — and since
@@ -105,7 +105,7 @@ def build_background(clip_paths: list[str], duration_seconds: float, out_path: s
         "-an",
         out_path,
     ]
-    _run(cmd)
+    run_ffmpeg(cmd)
     return out_path
 
 
@@ -158,7 +158,7 @@ def assemble_video(
         "-shortest",
         out_path,
     ]
-    _run(cmd)
+    run_ffmpeg(cmd)
     return out_path
 
 
@@ -175,5 +175,5 @@ def generate_thumbnail(video_path: str, out_path: str, timestamp: str = "00:00:0
         "1",
         out_path,
     ]
-    _run(cmd)
+    run_ffmpeg(cmd)
     return out_path

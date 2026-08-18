@@ -12,6 +12,31 @@ YouTube Data/Analytics APIs, Telegram/Discord) with honest fallbacks where
 an external dependency (ffmpeg, model weights, API approval) isn't
 available in a given environment — see each module's status below.
 
+## What works with zero API keys / signups
+
+- **Trends**: Google Trends and TikTok trending both need no key at all.
+- **Voice**: Kokoro is self-hosted and free (Apache 2.0); `pip install
+  kokoro soundfile` and the model weights download once from Hugging
+  Face on first use — no account, no key.
+- **Captions**: burned in either way — faster-whisper (free, local, one
+  model download) if installed, otherwise an even-split fallback with no
+  download at all.
+- **Video background**: `ffmpeg`'s own built-in filters generate an
+  animated gradient with zero network calls — no Pexels/Pixabay signup
+  needed to get a real rendered video.
+- **ffmpeg itself**: `apt-get install ffmpeg` (or your OS's package
+  manager) — free, one-time, no account.
+
+The one piece that genuinely needs an external call today is **script
+generation (Module 2)**, which uses the Claude API. There's no
+zero-network way around that — some LLM has to write the script text.
+If you don't want to use a hosted API key at all, point Module 2 at a
+local model server instead (e.g. Ollama, `llama.cpp`'s server mode)
+running on your own machine — that's a one-time local model download,
+not a recurring API key. Everything else in the pipeline runs the same
+either way, since the interface just needs "a script generation
+function," not specifically Claude.
+
 ## Quick start
 
 ```bash
@@ -102,6 +127,15 @@ so a missing/broken source never blocks the others.
 ### Module 4 — Video assembly — `built`, verified against real ffmpeg
 - [x] faster-whisper word-level captions, with an even-split fallback if it's not installed
 - [x] Pexels/Pixabay stock footage search + download by script keyword
+- [x] **Zero-API-key fallback**: when no `PEXELS_API_KEY`/`PIXABAY_API_KEY`
+      is set (or nothing matches), `procedural_background.py` renders an
+      animated gradient using only ffmpeg's own built-in `gradients`
+      filter — no network call, no signup, no model download. This used
+      to be a hard failure (`final_path=None`, no video at all); now the
+      pipeline always produces a real, watchable render. The look
+      (color pair + gradient type + animation seed) is picked from a
+      curated palette deterministically per topic, so the same script
+      keeps a consistent look but different topics get variety.
 - [x] ffmpeg pipeline: background + voiceover + burned-in captions (`assemble.py`)
 - [x] Vertical 9:16 output (1080x1920 scale+crop)
 - [x] Background music mix under the voiceover (`amix` filter)

@@ -17,6 +17,7 @@ from faceless_pipeline.models import Script, Video, VideoStatus
 from faceless_pipeline.modules.video.assemble import assemble_video, build_background, generate_thumbnail
 from faceless_pipeline.modules.video.captions import audio_duration_seconds, generate_captions
 from faceless_pipeline.modules.video.metadata import write_metadata
+from faceless_pipeline.modules.video.procedural_background import generate_procedural_background
 from faceless_pipeline.modules.video.stock_footage import fetch_background_clips
 from faceless_pipeline.modules.voice.run import generate_voiceover, script_to_narration_text
 from faceless_pipeline.modules.review.notify import notify_video_ready
@@ -82,17 +83,24 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
 
     try:
         clip_paths = fetch_background_clips(_keywords_from_topic(script.topic), str(out_dir / "clips"))
-        if not clip_paths:
-            raise RuntimeError("no stock footage available")
-        build_background(clip_paths, target_duration, background_path)
+        if clip_paths:
+            build_background(clip_paths, target_duration, background_path)
+        else:
+            # No Pexels/Pixabay key configured (or nothing matched) — this
+            # used to be a hard failure, so the pipeline could never
+            # produce a real video without first signing up for a stock
+            # footage API. Fall back to an animated gradient generated
+            # entirely by ffmpeg itself: no network call, no API key.
+            logger.info("No stock footage available — using a procedural background instead")
+            generate_procedural_background(target_duration, background_path, topic=script.topic)
         assemble_video(background_path, audio_path, srt_path, final_path)
         generate_thumbnail(final_path, thumbnail_path)
     except Exception:
         logger.exception(
             "Full ffmpeg assembly unavailable in this environment "
-            "(missing ffmpeg binary, stock footage API keys, etc). "
-            "Recording paths without a rendered file so the review "
-            "checkpoint can still be exercised end-to-end."
+            "(missing ffmpeg binary, most likely). Recording paths "
+            "without a rendered file so the review checkpoint can still "
+            "be exercised end-to-end."
         )
         final_path = None
         thumbnail_path = None
