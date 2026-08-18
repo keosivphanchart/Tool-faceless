@@ -173,14 +173,97 @@ def _call_ollama(system_prompt: str, user_prompt: str) -> dict:
     return _parse_json_response(raw_text, "Ollama")
 
 
-def _call_llm(system_prompt: str, user_prompt: str) -> dict:
-    if settings.script_provider == "ollama":
-        script_json = _call_ollama(system_prompt, user_prompt)
-    elif settings.script_provider == "anthropic":
-        script_json = _call_anthropic(system_prompt, user_prompt)
-    else:
-        raise RuntimeError(f"Unknown SCRIPT_PROVIDER '{settings.script_provider}' — use 'anthropic' or 'ollama'")
+def _call_openai_compatible(
+    base_url: str, api_key: str, model: str, system_prompt: str, user_prompt: str, provider_name: str
+) -> dict:
+    """Shared by OpenAI and Groq — Groq's hosted API deliberately mirrors
+    OpenAI's /chat/completions request/response shape, so one HTTP call
+    covers both, just pointed at a different base_url with a different key.
+    """
+    import requests
 
+    if not api_key:
+        raise RuntimeError(f"{provider_name} API key is not set")
+
+    try:
+        response = requests.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "response_format": {"type": "json_object"},
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError as exc:
+        raise RuntimeError(f"Could not reach {provider_name} at {base_url}") from exc
+    except requests.exceptions.HTTPError as exc:
+        raise RuntimeError(f"{provider_name} API error ({response.status_code}): {response.text[:300]}") from exc
+
+    raw_text = response.json()["choices"][0]["message"]["content"]
+    return _parse_json_response(raw_text, provider_name)
+
+
+def _call_openai(system_prompt: str, user_prompt: str) -> dict:
+    return _call_openai_compatible(
+        settings.openai_base_url, settings.openai_api_key, settings.openai_model, system_prompt, user_prompt, "OpenAI"
+    )
+
+
+def _call_groq(system_prompt: str, user_prompt: str) -> dict:
+    return _call_openai_compatible(
+        settings.groq_base_url, settings.groq_api_key, settings.groq_model, system_prompt, user_prompt, "Groq"
+    )
+
+
+def _call_gemini(system_prompt: str, user_prompt: str) -> dict:
+    import requests
+
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+
+    url = f"{settings.gemini_base_url}/models/{settings.gemini_model}:generateContent"
+    try:
+        response = requests.post(
+            url,
+            params={"key": settings.gemini_api_key},
+            json={
+                "systemInstruction": {"parts": [{"text": system_prompt}]},
+                "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+                "generationConfig": {"responseMimeType": "application/json"},
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError as exc:
+        raise RuntimeError(f"Could not reach Gemini at {settings.gemini_base_url}") from exc
+    except requests.exceptions.HTTPError as exc:
+        raise RuntimeError(f"Gemini API error ({response.status_code}): {response.text[:300]}") from exc
+
+    raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    return _parse_json_response(raw_text, "Gemini")
+
+
+_PROVIDERS = {
+    "anthropic": _call_anthropic,
+    "ollama": _call_ollama,
+    "openai": _call_openai,
+    "gemini": _call_gemini,
+    "groq": _call_groq,
+}
+
+
+def _call_llm(system_prompt: str, user_prompt: str) -> dict:
+    call = _PROVIDERS.get(settings.script_provider)
+    if call is None:
+        raise RuntimeError(f"Unknown SCRIPT_PROVIDER '{settings.script_provider}' — use one of {sorted(_PROVIDERS)}")
+
+    script_json = call(system_prompt, user_prompt)
     script_json["storyboard"] = _validate_storyboard(script_json.get("storyboard"), script_json)
     return script_json
 

@@ -51,7 +51,7 @@ export default function Settings() {
         </div>
         <div>
           <span className="text-neu-muted">
-            {status.script_provider === "ollama" ? "Ollama model (OLLAMA_MODEL): " : "Script model (SCRIPT_MODEL): "}
+            {status.script_provider.toUpperCase()}_MODEL:{" "}
           </span>
           {status.script_model}
         </div>

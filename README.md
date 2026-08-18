@@ -28,9 +28,21 @@ available in a given environment — see each module's status below.
   manager) — free, one-time, no account.
 
 **Script generation (Module 2)** needs some LLM to write the script
-text — there's no zero-network way around that — but it doesn't have to
-be a paid API. Set `SCRIPT_PROVIDER=ollama` in `.env` to use a free,
-local model instead of Claude:
+text — there's no zero-network way around that — but it isn't locked to
+one paid API. `SCRIPT_PROVIDER` in `.env` picks between five, all behind
+the same JSON contract (`_call_llm` in `generator.py`), so everything
+downstream (voice, video, review, publish) runs identically no matter
+which one produced the script:
+
+| `SCRIPT_PROVIDER` | Cost | Setup |
+|---|---|---|
+| `anthropic` (default) | Paid | `ANTHROPIC_API_KEY` from [console.anthropic.com](https://console.anthropic.com) |
+| `ollama` | Free, local | Install [Ollama](https://ollama.com), `ollama pull llama3.2`, `ollama serve` |
+| `openai` | Paid | `OPENAI_API_KEY` from [platform.openai.com](https://platform.openai.com/api-keys) |
+| `gemini` | Has a free tier | `GEMINI_API_KEY` from [aistudio.google.com](https://aistudio.google.com/apikey) |
+| `groq` | Has a free tier | `GROQ_API_KEY` from [console.groq.com](https://console.groq.com/keys), runs open models on fast inference hardware |
+
+Ollama setup, since it's the only one with no key at all:
 
 ```bash
 # one-time setup, on your own machine
@@ -46,15 +58,15 @@ OLLAMA_BASE_URL=http://localhost:11434   # default, change if Ollama runs elsewh
 OLLAMA_MODEL=llama3.2                    # any model you've pulled
 ```
 
-That's a one-time local model download, not a recurring API key or
-per-call cost. `SCRIPT_PROVIDER=anthropic` (the default) uses
-`ANTHROPIC_API_KEY` + `SCRIPT_MODEL` instead — pick whichever fits;
-everything downstream (voice, video, review, publish) runs identically
-either way since it only depends on the script JSON that comes out, not
-on which provider produced it. Every video in this pipeline can be made
-end-to-end with $0 spent and no account signups, using
-`SCRIPT_PROVIDER=ollama` + Kokoro voice + the procedural ffmpeg
-background.
+For the paid/free-tier ones, set `SCRIPT_PROVIDER` plus that provider's
+`*_API_KEY` (and optionally `*_MODEL`/`*_BASE_URL` to override the
+defaults) — see `.env.example` for the full list. `openai` and `groq`
+share one HTTP call internally since Groq's hosted API deliberately
+mirrors OpenAI's `/chat/completions` shape.
+
+Every video in this pipeline can still be made end-to-end with $0 spent
+and no account signups, using `SCRIPT_PROVIDER=ollama` + Kokoro voice +
+the procedural ffmpeg background.
 
 ## Quick start
 
@@ -128,10 +140,10 @@ to an empty list (not an error) when its key is unset or the call fails,
 so a missing/broken source never blocks the others.
 
 ### Module 2 — Script generator — `built`
-- [x] Hook / promise / body / payoff / CTA via Claude (`SCRIPT_PROVIDER=anthropic`,
-      the default) or a free local model via Ollama (`SCRIPT_PROVIDER=ollama`,
-      see the zero-API-keys section above) — same JSON contract either way,
-      dispatched by `_call_llm` in `generator.py`
+- [x] Hook / promise / body / payoff / CTA via any of 5 `SCRIPT_PROVIDER`
+      options — `anthropic` (default), `ollama` (free/local), `openai`,
+      `gemini`, `groq` — same JSON contract either way, dispatched by
+      `_call_llm` in `generator.py`; see the zero-API-keys section above
 - [x] Style presets: listicle, story, explainer, hot take
 - [x] Length variants: 15s / 30s / 60s (word-count targets)
 - [x] Regenerate with feedback — edit note round-trips into a rewrite, original marked `superseded`
