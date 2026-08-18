@@ -2,15 +2,15 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.models import Script, Video, VideoStatus
+from faceless_pipeline.main import app
+from faceless_pipeline.models import Script, Video, VideoStatus
 
 client = TestClient(app)
 
 
 def test_review_queue_approve_reject_flow(db_session, monkeypatch):
     # Point the app's dependency-injected session at the same in-memory db
-    from app.db import get_db
+    from faceless_pipeline.db import get_db
 
     def _override_get_db():
         yield db_session
@@ -30,7 +30,7 @@ def test_review_queue_approve_reject_flow(db_session, monkeypatch):
     pending = client.get("/api/videos", params={"status": "pending"}).json()
     assert any(v["id"] == video.id for v in pending)
 
-    with patch("app.modules.publisher.run.publish_video"):
+    with patch("faceless_pipeline.modules.publisher.run.publish_video"):
         resp = client.post(f"/api/videos/{video.id}/approve")
     assert resp.status_code == 200
     assert resp.json()["status"] == "approved"
@@ -39,7 +39,7 @@ def test_review_queue_approve_reject_flow(db_session, monkeypatch):
 
 
 def test_reject_video_sets_status_and_note(db_session):
-    from app.db import get_db
+    from faceless_pipeline.db import get_db
 
     def _override_get_db():
         yield db_session

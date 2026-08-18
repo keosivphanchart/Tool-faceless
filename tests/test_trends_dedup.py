@@ -1,4 +1,4 @@
-from app.modules.trends.dedup import dedupe_topics, normalize_topic
+from faceless_pipeline.modules.trends.dedup import dedupe_topics, normalize_topic
 
 
 def test_normalize_topic_strips_punctuation_and_case():

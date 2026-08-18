@@ -5,7 +5,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 
 import pytest
 
-from app.db import Base, SessionLocal, engine
+from faceless_pipeline.db import Base, SessionLocal, engine
 
 
 @pytest.fixture()

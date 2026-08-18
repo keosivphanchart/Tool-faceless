@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.modules.scripts.generator import generate_script, has_existing_script, regenerate_with_feedback
+from faceless_pipeline.modules.scripts.generator import generate_script, has_existing_script, regenerate_with_feedback
 
 FAKE_SCRIPT_JSON = (
     '{"hook": "Did you know...", "promise": "I will show you", '

@@ -16,36 +16,46 @@ available in a given environment — see each module's status below.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in the keys you have; everything else degrades gracefully
+pip install -e ".[all]"      # editable install of the src/ package + every module's deps
+cp .env.example .env         # fill in the keys you have; everything else degrades gracefully
 
-uvicorn app.main:app --reload   # backend on :8000, docs at /docs
+uvicorn faceless_pipeline.main:app --reload   # backend on :8000, docs at /docs
 
 cd dashboard
 npm install
-npm run dev              # dashboard on :5173, proxies /api to :8000
+npm run dev                  # dashboard on :5173, proxies /api to :8000
 ```
+
+Installing only what a given module needs (e.g. on a lean cron box that
+only runs the trend finder) works the same way: `pip install -e ".[trends]"`.
+See the `[project.optional-dependencies]` groups in `pyproject.toml`.
 
 Run the test suite: `pytest`
 
 ## Architecture
 
+`src/faceless_pipeline/` is a proper installable package (`pip install -e .`)
+rather than a loose `app/` folder, so it can be imported the same way in
+tests, cron entry points, and Docker without path hacks.
+
 ```
-app/
-  main.py            FastAPI app (mounts every module's router under /api)
-  config.py           Settings loaded from .env
-  db.py                SQLAlchemy engine/session
-  models.py            trends / scripts / videos / performance tables
-  api/                 pipeline status + manual-trigger endpoints, settings status
+pyproject.toml          Package metadata + per-module dependency groups
+src/faceless_pipeline/
+  main.py                FastAPI app (mounts every module's router under /api)
+  config.py               Settings loaded from .env
+  db.py                    SQLAlchemy engine/session
+  models.py                trends / scripts / videos / performance tables
+  api/                     pipeline status + manual-trigger endpoints, settings status
   modules/
-    trends/            Module 1
-    scripts/            Module 2
-    voice/              Module 3
-    video/              Module 4
-    review/             Module 5
-    publisher/          Module 6
-    analytics/          Module 8
-dashboard/            Module 7 — React + Tailwind + Vite
+    trends/                Module 1
+    scripts/                Module 2
+    voice/                  Module 3
+    video/                  Module 4
+    review/                 Module 5
+    publisher/              Module 6
+    analytics/              Module 8
+dashboard/                Module 7 — React + Tailwind + Vite
+tests/                     pytest suite, imports faceless_pipeline directly
 ```
 
 Each module is independently runnable via its own `run.py` (CLI entry
@@ -55,13 +65,23 @@ together beyond the DB tables they share.
 
 ## Module status
 
-### Module 1 — Trend finder — `built`
+### Module 1 — Trend finder — `built`, five sources
 - [x] Google Trends related/rising queries for seed keywords (`pytrends`)
 - [x] YouTube trending pull (optional, needs `YOUTUBE_API_KEY`)
 - [x] Reddit trending posts via PRAW (optional, needs Reddit app credentials)
-- [x] Fuzzy dedup of near-identical topics (`rapidfuzz`) before ranking
+- [x] TikTok trending hashtags (optional, no key needed — reads TikTok
+      Creative Center's public trend listing; unofficial/undocumented, so
+      it's defensive-by-design and can be turned off with
+      `ENABLE_TIKTOK_TRENDS=false` if it ever breaks)
+- [x] News headlines via NewsAPI.org (optional, needs `NEWSAPI_KEY`) —
+      catches what's breaking right now, not just what's already trending
+- [x] Fuzzy dedup of near-identical topics (`rapidfuzz`) before ranking, across all five sources
 - [x] History persisted to `trends` table so a topic is never resurfaced
 - [x] `scripts/cron_trend_finder.sh` — daily cron entry point
+
+All five sources run every time the trend finder fires; each one degrades
+to an empty list (not an error) when its key is unset or the call fails,
+so a missing/broken source never blocks the others.
 
 ### Module 2 — Script generator — `built`
 - [x] Hook / promise / body / payoff / CTA via the Claude API
@@ -71,7 +91,7 @@ together beyond the DB tables they share.
 - [x] Per-topic script history check blocks accidental duplicates
 
 ### Module 3 — Voice generation — `built`, Kokoro requires local install
-- [x] Kokoro integration (`app/modules/voice/kokoro_tts.py`) — install `kokoro`+`soundfile` to activate
+- [x] Kokoro integration (`src/faceless_pipeline/modules/voice/kokoro_tts.py`) — install `kokoro`+`soundfile` to activate
 - [x] Voice profile selection (`voice_profiles.py`)
 - [x] Fallback to a paid API (ElevenLabs by default) when Kokoro is unavailable/low quality
 - [x] Word-level timestamps deferred to Whisper in Module 4, per spec
@@ -131,7 +151,7 @@ to bring it up.
 ## Data models
 
 Matches the spec's table exactly, plus a few operational fields (see
-`app/models.py` for the full field list — parent/feedback tracking on
+`src/faceless_pipeline/models.py` for the full field list — parent/feedback tracking on
 `scripts`, file paths + review notes on `videos`).
 
 | Table | Core fields |
