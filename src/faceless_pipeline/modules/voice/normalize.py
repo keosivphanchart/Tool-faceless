@@ -19,6 +19,15 @@ def normalize_loudness(in_path: str, out_path: str, target_lufs: float = -14.0) 
         in_path,
         "-af",
         f"loudnorm=I={target_lufs}:TP=-1.5:LRA=11",
+        # loudnorm's true-peak (TP) analysis oversamples internally, and
+        # without an explicit output rate ffmpeg can leave the stream at
+        # that oversampled rate (observed: 192kHz from a 24kHz input).
+        # That also flips the wav header to WAVE_FORMAT_EXTENSIBLE, which
+        # Python's stdlib `wave` module can't parse — silently breaking
+        # video/captions.audio_duration_seconds() downstream. Pin to a
+        # standard rate so the output stays plain PCM.
+        "-ar",
+        "48000",
         out_path,
     ]
     logger.info("Normalizing loudness: %s", " ".join(cmd))

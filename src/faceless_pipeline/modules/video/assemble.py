@@ -34,6 +34,28 @@ def _run(cmd: list[str]) -> None:
         raise RuntimeError(f"ffmpeg failed: {result.stderr[-2000:]}")
 
 
+def _probe_duration(path: str) -> float | None:
+    """Real clip duration via ffprobe, or None if it can't be determined
+    (corrupt file, ffprobe missing, etc) — callers should treat None as
+    "assume it's short" rather than skipping it, so a failed probe biases
+    toward looping too much rather than too little.
+    """
+    cmd = [
+        settings.ffprobe_binary,
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return None
+        return float(result.stdout.strip())
+    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+        return None
+
+
 def build_background(clip_paths: list[str], duration_seconds: float, out_path: str) -> str:
     """Concatenates/loops background clips to cover `duration_seconds`,
     scaled and center-cropped to a 9:16 frame."""
@@ -44,16 +66,25 @@ def build_background(clip_paths: list[str], duration_seconds: float, out_path: s
     concat_list_path = str(Path(out_path).with_suffix(".concat.txt"))
 
     # Loop the clip list until it covers the target duration; ffmpeg's
-    # concat demuxer handles the actual stitching.
+    # concat demuxer handles the actual stitching. Must use each clip's
+    # *real* duration here, not a guess: assemble_video() below runs with
+    # -shortest, so if this list ends up covering less real content than
+    # duration_seconds, the concat demuxer just runs out of frames early
+    # and the final video — including the narration audio — gets cut off
+    # at whatever the background actually reached. A fixed "assume every
+    # clip is ~6s" estimate silently produced a 6s background for a
+    # requested 15s duration when the source clips were only 2s each.
+    FALLBACK_CLIP_LEN = 2.0  # used when a probe fails; biases toward looping more, not less
+    clip_durations = [_probe_duration(c) or FALLBACK_CLIP_LEN for c in clip_paths]
+
     lines = []
     total = 0.0
     idx = 0
-    # Rough per-clip estimate; real duration is enforced by -t on the output.
-    assumed_clip_len = 6.0
-    while total < duration_seconds:
-        clip = clip_paths[idx % len(clip_paths)]
-        lines.append(f"file '{Path(clip).resolve()}'")
-        total += assumed_clip_len
+    max_iterations = 10_000  # safety valve against a pathologically tiny reported duration
+    while total < duration_seconds and idx < max_iterations:
+        clip_index = idx % len(clip_paths)
+        lines.append(f"file '{Path(clip_paths[clip_index]).resolve()}'")
+        total += max(clip_durations[clip_index], 0.1)
         idx += 1
     Path(concat_list_path).write_text("\n".join(lines), encoding="utf-8")
 

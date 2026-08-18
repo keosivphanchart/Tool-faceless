@@ -99,7 +99,7 @@ so a missing/broken source never blocks the others.
 - If neither Kokoro nor the fallback API is available, a silent placeholder
   wav is written so the rest of the pipeline stays testable end-to-end.
 
-### Module 4 — Video assembly — `built`, needs ffmpeg + API keys at runtime
+### Module 4 — Video assembly — `built`, verified against real ffmpeg
 - [x] faster-whisper word-level captions, with an even-split fallback if it's not installed
 - [x] Pexels/Pixabay stock footage search + download by script keyword
 - [x] ffmpeg pipeline: background + voiceover + burned-in captions (`assemble.py`)
@@ -107,10 +107,21 @@ so a missing/broken source never blocks the others.
 - [x] Background music mix under the voiceover (`amix` filter)
 - [x] Thumbnail frame extraction
 - [x] `metadata.json` sidecar (title/description/tags)
-- This sandbox doesn't have `ffmpeg` installed, so the ffmpeg-dependent
-  steps couldn't be exercised here — the orchestrator (`run.py`) catches
-  that and still creates the `videos` row (without a rendered file) so
-  Module 5 can be tested independently. Install ffmpeg to get real output.
+- Verified against a real `ffmpeg` install (background scaling/looping,
+  caption burn-in, music mixing, thumbnail extraction, full
+  `assemble_pipeline` orchestration) — not just the "ffmpeg unavailable"
+  degraded path. Two real bugs only showed up once real ffmpeg actually
+  ran: `normalize_loudness()` left audio at an oversampled rate that
+  Python's `wave` module couldn't parse (silently defeating the
+  narration-duration fix above), and `build_background()` sized its clip
+  loop off a hardcoded 6s-per-clip guess instead of each clip's real
+  duration, so short clips could under-fill the requested length and get
+  truncated by `assemble_video()`'s `-shortest`. Both fixed; see
+  `tests/test_normalize_loudness_output_format.py` and
+  `tests/test_build_background_duration.py` (both skip automatically if
+  `ffmpeg`/`ffprobe` aren't on PATH). If `ffmpeg` genuinely isn't
+  installed, the orchestrator (`run.py`) catches that and still creates
+  the `videos` row without a rendered file, so Module 5 stays testable.
 
 ### Module 5 — Review checkpoint — `built`
 - [x] Dashboard queue of pending videos
@@ -130,14 +141,18 @@ so a missing/broken source never blocks the others.
 - [x] Scheduling (`scheduled_for`) — immediate publish or queue for later
 - [x] Publish history + platform video IDs stored on the `videos` row
 
-### Module 7 — Dashboard — `built` (skeleton + functional review queue)
+### Module 7 — Dashboard — `built`, verified end-to-end against a real backend
 React + Tailwind + Vite app with all seven views from the spec:
 pipeline status (+ manual triggers), trend list, script library (+ generate
 by topic), review queue (fully functional against the Module 5 API),
 publish history, analytics, and a read-only settings/credentials-status
-page. `npm install` wasn't run in this environment (no network/npm here) —
-the code is complete and typed but unbuilt; run `npm install && npm run dev`
-to bring it up.
+page. `npm install` + `npm run build` succeed with zero errors, `tsc
+--noEmit` type-checks clean, and it's been driven end-to-end with a
+headless browser against a real running backend: real seeded trends,
+scripts, and a real ffmpeg-rendered video all render correctly, the
+review queue's video player pulls real bytes through `/media`, and
+clicking Approve / Regenerate through the actual UI hits the real API
+and settles into the right state with zero console errors.
 
 ### Module 8 — Analytics feedback loop — `built` (YouTube), TikTok blocked on same review
 - [x] Weekly job pulls YouTube Analytics (`reports.query`) per published video
