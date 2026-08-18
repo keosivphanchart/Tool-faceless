@@ -21,9 +21,13 @@ from faceless_pipeline.modules.scripts.presets import (
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are a short-form video scriptwriter for faceless \
-content channels (YouTube Shorts / TikTok / Reels). You write tight, \
-high-retention scripts.
+STORYBOARD_BEATS = ["hook", "promise", "body", "payoff", "cta"]
+
+SYSTEM_PROMPT = """You are a short-form video scriptwriter and visual \
+director for faceless content channels (YouTube Shorts / TikTok / \
+Reels). You write tight, high-retention scripts AND plan what's on \
+screen for each beat, since these videos have no host to look at — the \
+visual has to carry the moment on its own.
 
 Always respond with ONLY a JSON object with exactly these keys:
 {
@@ -31,7 +35,15 @@ Always respond with ONLY a JSON object with exactly these keys:
   "promise": "...",  // what the viewer gets if they keep watching
   "body": "...",     // the core content, delivering on the promise
   "payoff": "...",   // the satisfying conclusion / insight
-  "cta": "..."        // one short call to action
+  "cta": "...",      // one short call to action
+  "storyboard": [    // exactly 5 shots, one per beat above, in order
+    {
+      "beat": "hook",         // one of: hook, promise, body, payoff, cta
+      "visual": "...",        // one concrete sentence: what's on screen during this beat
+      "keywords": ["...", "..."]  // 2-3 short search terms for stock footage matching that visual
+    }
+    // ... one entry each for promise, body, payoff, cta, same shape, same order
+  ]
 }
 No markdown, no commentary, no code fences — raw JSON only."""
 
@@ -56,6 +68,51 @@ def _build_user_prompt(topic: str, style: str, length_variant: str, feedback_not
     return prompt
 
 
+_STOPWORDS = {"the", "a", "an", "of", "to", "in", "for", "and", "on", "is", "with", "your", "you", "this", "that"}
+
+
+def _extract_keywords(text: str, max_keywords: int = 3) -> list[str]:
+    words = [w.strip(".,!?").lower() for w in text.split()]
+    keywords = [w for w in words if w and w not in _STOPWORDS]
+    return keywords[:max_keywords] or [text[:20]]
+
+
+def _default_storyboard(script_json: dict) -> list[dict]:
+    """Built when the model omits storyboard or returns a malformed one,
+    so the feature degrades to "generic per-beat shot" instead of losing
+    the whole script generation over a formatting slip."""
+    return [
+        {
+            "beat": beat,
+            "visual": f"Visual for the {beat} beat: {script_json.get(beat, '')[:80]}",
+            "keywords": _extract_keywords(str(script_json.get(beat, beat))),
+        }
+        for beat in STORYBOARD_BEATS
+    ]
+
+
+def _validate_storyboard(storyboard: object, script_json: dict) -> list[dict]:
+    if not isinstance(storyboard, list) or len(storyboard) != len(STORYBOARD_BEATS):
+        logger.warning("Storyboard missing or wrong length in model response, using a default one")
+        return _default_storyboard(script_json)
+
+    normalized = []
+    for expected_beat, shot in zip(STORYBOARD_BEATS, storyboard):
+        if not isinstance(shot, dict) or not shot.get("visual"):
+            logger.warning("Storyboard shot for beat=%s malformed, using a default one", expected_beat)
+            normalized.append(_default_storyboard(script_json)[STORYBOARD_BEATS.index(expected_beat)])
+            continue
+        keywords = shot.get("keywords")
+        normalized.append(
+            {
+                "beat": expected_beat,
+                "visual": str(shot["visual"]),
+                "keywords": [str(k) for k in keywords] if isinstance(keywords, list) and keywords else _extract_keywords(str(shot["visual"])),
+            }
+        )
+    return normalized
+
+
 def _call_claude(system_prompt: str, user_prompt: str) -> dict:
     import anthropic
 
@@ -65,17 +122,20 @@ def _call_claude(system_prompt: str, user_prompt: str) -> dict:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     message = client.messages.create(
         model=settings.script_model,
-        max_tokens=1024,
+        max_tokens=1536,
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
     raw_text = "".join(block.text for block in message.content if block.type == "text")
 
     try:
-        return json.loads(raw_text)
+        script_json = json.loads(raw_text)
     except json.JSONDecodeError:
         logger.error("Claude response was not valid JSON: %s", raw_text)
         raise ValueError("Script generation returned malformed JSON from the model")
+
+    script_json["storyboard"] = _validate_storyboard(script_json.get("storyboard"), script_json)
+    return script_json
 
 
 def has_existing_script(db: Session, topic: str) -> bool:

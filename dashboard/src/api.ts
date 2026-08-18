@@ -21,10 +21,25 @@ export interface Trend {
   created_at: string;
 }
 
+export interface StoryboardShot {
+  beat: "hook" | "promise" | "body" | "payoff" | "cta";
+  visual: string;
+  keywords: string[];
+}
+
+export interface ScriptText {
+  hook: string;
+  promise: string;
+  body: string;
+  payoff: string;
+  cta: string;
+  storyboard?: StoryboardShot[];
+}
+
 export interface ScriptRecord {
   id: number;
   topic: string;
-  script: { hook: string; promise: string; body: string; payoff: string; cta: string };
+  script: ScriptText;
   style: string;
   length_variant: string;
   status: string;

@@ -1,22 +1,45 @@
-"""Regression test: build_background() must be sized to the *actual*
-rendered voiceover duration, not a pre-TTS word-count estimate.
+"""Regression test: the final rendered video's duration must match the
+*actual* rendered voiceover, not a pre-TTS word-count estimate.
 
-Previously assemble_pipeline used `len(text.split()) / 2.5` to size the
-background clip, then assemble_video() combined it with the real audio
-using ffmpeg's -shortest — so whenever the estimate undershot the real
-audio (guaranteed in dry-run mode, where the placeholder audio is a fixed
-3s regardless of script length), the final render would silently cut the
-narration off wherever the shorter background stream ended.
+Originally: assemble_pipeline used `len(text.split()) / 2.5` to size the
+single background clip, then assemble_video() combined it with the real
+audio using ffmpeg's -shortest — so whenever the estimate undershot the
+real audio (guaranteed in dry-run mode, where the placeholder audio is a
+fixed 3s regardless of script length), the final render would silently
+cut the narration off wherever the shorter background stream ended.
+
+The fix now lives one layer down: word-level caption timestamps are
+derived directly from the real audio duration (captions.py's
+fallback_word_timing calls audio_duration_seconds), and
+storyboard.compute_beat_timing() slices those real timestamps per beat —
+so background segment durations trace back to real audio by
+construction, not a separate estimate that can drift from it. This test
+checks the invariant end-to-end: final.mp4's duration must match the
+real voiceover's duration, not a word-count guess, even for a script
+whose word count would produce a very different estimate.
+
+Requires a real `ffmpeg`; skipped if unavailable.
 """
+import shutil
+import subprocess
 from unittest.mock import patch
 
+import pytest
+
+from faceless_pipeline import config
 from faceless_pipeline.modules.scripts.generator import generate_script
 from faceless_pipeline.modules.video.captions import audio_duration_seconds
 from faceless_pipeline.modules.video.run import assemble_pipeline
 
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="requires a real ffmpeg binary")
+
+# A 60-word body gives a word-count estimate of 60/2.5 = 24s, but the
+# dry-run placeholder audio is a fixed 3s — the bug this guards against
+# would size the background off the 24s estimate while the real audio
+# (and therefore the real caption timing) is only ~3s long.
 FAKE_SCRIPT_JSON = (
     '{"hook": "h", "promise": "p", '
-    '"body": "' + " ".join(["word"] * 60) + '", '  # long body -> large word-count estimate
+    '"body": "' + " ".join(["word"] * 60) + '", '
     '"payoff": "pa", "cta": "c"}'
 )
 
@@ -30,38 +53,34 @@ class _FakeMessage:
     content = [_FakeBlock()]
 
 
-def test_background_duration_matches_real_audio_not_word_count_estimate(db_session, tmp_path, monkeypatch):
-    from faceless_pipeline import config
+def _probe_duration(path: str) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return float(result.stdout.strip())
 
+
+def test_final_video_duration_matches_real_audio_not_word_count_estimate(db_session, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "output_dir", str(tmp_path))
+    monkeypatch.setattr(config.settings, "pexels_api_key", "")
+    monkeypatch.setattr(config.settings, "pixabay_api_key", "")
 
     with patch("anthropic.Anthropic") as mock_client:
         mock_client.return_value.messages.create.return_value = _FakeMessage()
         script = generate_script(db_session, topic="Duration bug check")
 
-    captured = {}
+    video = assemble_pipeline(db_session, script.id, dry_run=True)
 
-    def _fake_build_background(clip_paths, duration_seconds, out_path):
-        captured["duration"] = duration_seconds
-        return out_path
-
-    # A 60-word body gives a word-count estimate of 60/2.5 = 24s, but the
-    # dry-run placeholder audio is a fixed 3s — the bug would pass 24s to
-    # build_background while the real audio is only 3s long.
     word_count_estimate = 60 / 2.5
-
-    with patch("faceless_pipeline.modules.video.run.fetch_background_clips", return_value=["/fake/clip.mp4"]), \
-         patch("faceless_pipeline.modules.video.run.build_background", side_effect=_fake_build_background), \
-         patch("faceless_pipeline.modules.video.run.assemble_video"), \
-         patch("faceless_pipeline.modules.video.run.generate_thumbnail"):
-        video = assemble_pipeline(db_session, script.id, dry_run=True)
-
     real_audio_duration = audio_duration_seconds(video.audio_path)
+    final_duration = _probe_duration(video.file_path)
 
-    assert captured["duration"] == real_audio_duration
-    assert captured["duration"] != word_count_estimate
-    assert captured["duration"] < word_count_estimate, (
-        "this specific scenario (dry-run) should show the real audio "
-        "shorter than the old estimate; if this ever flips, the bug this "
-        "test guards against would have caused truncation instead"
+    assert real_audio_duration < word_count_estimate, (
+        "this scenario (dry-run) should show real audio shorter than the "
+        "old word-count estimate; if this ever flips, it no longer "
+        "exercises the truncation bug this test guards against"
     )
+    assert final_duration == pytest.approx(real_audio_duration, abs=0.5)

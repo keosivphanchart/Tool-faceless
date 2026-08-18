@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ScriptRecord } from "../api";
-import { NeuBadge, NeuButton, NeuCard, NeuInput, NeuSelect } from "../components/Neu";
+import { NeuBadge, NeuButton, NeuCard, NeuInput, NeuSelect, StoryboardStrip } from "../components/Neu";
 
 export default function Scripts() {
   const [scripts, setScripts] = useState<ScriptRecord[]>([]);
@@ -72,6 +72,11 @@ export default function Scripts() {
             </div>
             <p className="mt-3 text-sm font-medium">{s.script.hook}</p>
             <p className="text-sm text-neu-muted mt-1">{s.script.body}</p>
+            {s.script.storyboard && (
+              <div className="mt-3">
+                <StoryboardStrip shots={s.script.storyboard} />
+              </div>
+            )}
           </NeuCard>
         ))}
         {scripts.length === 0 && <p className="text-neu-muted text-sm">No scripts yet.</p>}

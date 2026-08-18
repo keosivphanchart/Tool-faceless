@@ -114,6 +114,17 @@ so a missing/broken source never blocks the others.
 - [x] Length variants: 15s / 30s / 60s (word-count targets)
 - [x] Regenerate with feedback — edit note round-trips into a rewrite, original marked `superseded`
 - [x] Per-topic script history check blocks accidental duplicates
+- [x] **Storyboard**: the same Claude call also plans what's on screen for
+      each beat — a one-sentence visual description plus footage search
+      keywords, one shot per hook/promise/body/payoff/cta. No extra API
+      call (script generation already needs one). If the model omits it
+      or returns something malformed, it degrades to a generated default
+      per beat rather than losing the whole script over a formatting
+      slip — see `_validate_storyboard`/`_default_storyboard` in
+      `generator.py`. Module 4 uses this to cut between a distinct
+      background per beat instead of one static background for the
+      whole video; shown in the dashboard's Script library and Review
+      queue so the human sees the shot-by-shot plan before approving.
 
 ### Module 3 — Voice generation — `built`, Kokoro requires local install
 - [x] Kokoro integration (`src/faceless_pipeline/modules/voice/kokoro_tts.py`) — install `kokoro`+`soundfile` to activate
@@ -136,6 +147,19 @@ so a missing/broken source never blocks the others.
       (color pair + gradient type + animation seed) is picked from a
       curated palette deterministically per topic, so the same script
       keeps a consistent look but different topics get variety.
+- [x] **Storyboard-driven backgrounds** (`storyboard.py`): when the
+      script has a storyboard, each beat gets its own background segment
+      instead of one background for the whole video — real stock footage
+      per beat's keywords if available, otherwise a procedural gradient
+      described by that beat's own visual text. Segment durations come
+      from word-level caption timestamps (`compute_beat_timing`), sliced
+      off the same real audio duration used elsewhere — not padded to a
+      fixed length, since assemble_video()'s `-shortest` would silently
+      truncate later beats' visuals (while their captions, timed
+      independently, kept playing) if the total ran long. Falls back to
+      the single-background flow for scripts with no storyboard (e.g.
+      generated before this feature) or when caption timing isn't
+      available.
 - [x] ffmpeg pipeline: background + voiceover + burned-in captions (`assemble.py`)
 - [x] Vertical 9:16 output (1080x1920 scale+crop)
 - [x] Background music mix under the voiceover (`amix` filter)

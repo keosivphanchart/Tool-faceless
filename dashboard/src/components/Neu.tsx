@@ -97,3 +97,27 @@ export function NeuBadge({ children, className }: { children: ReactNode; classNa
     </span>
   );
 }
+
+export interface StoryboardShot {
+  beat: string;
+  visual: string;
+  keywords: string[];
+}
+
+/** Per-beat visual plan (hook/promise/body/payoff/cta), each shot shown
+ * as its own small pressed panel — the reviewer's shot-by-shot view of
+ * what's on screen before approving, not just the spoken text. */
+export function StoryboardStrip({ shots }: { shots: StoryboardShot[] | undefined }) {
+  if (!shots || shots.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-5 gap-2">
+      {shots.map((shot) => (
+        <div key={shot.beat} className="rounded-neu-sm shadow-neu-pressed-sm p-2 space-y-1">
+          <p className="text-[10px] uppercase tracking-wide text-neu-accent font-semibold">{shot.beat}</p>
+          <p className="text-xs text-neu-text leading-snug">{shot.visual}</p>
+        </div>
+      ))}
+    </div>
+  );
+}

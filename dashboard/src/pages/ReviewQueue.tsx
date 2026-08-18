@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ReviewVideo } from "../api";
-import { NeuButton, NeuCard, NeuTextarea } from "../components/Neu";
+import { NeuButton, NeuCard, NeuTextarea, StoryboardStrip } from "../components/Neu";
 
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
@@ -103,6 +103,8 @@ export default function ReviewQueue() {
               </p>
             </div>
           </div>
+
+          {v.script.text.storyboard && <StoryboardStrip shots={v.script.text.storyboard} />}
 
           <NeuTextarea
             className="w-full"

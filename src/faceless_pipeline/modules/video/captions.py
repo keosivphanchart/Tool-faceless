@@ -80,7 +80,12 @@ def words_to_srt(words: list[dict], out_path: str, words_per_caption: int = 4) -
     return out_path
 
 
-def generate_captions(audio_path: str, script_text: str, out_srt_path: str) -> str:
+def generate_captions(audio_path: str, script_text: str, out_srt_path: str) -> tuple[str, list[dict]]:
+    """Returns (srt_path, words) — callers that only need the caption
+    file can ignore the second value; video/storyboard.py uses the
+    word-level timestamps to figure out which time range of the final
+    video belongs to which script beat.
+    """
     try:
         words = transcribe_words(audio_path)
     except RuntimeError:
@@ -90,4 +95,4 @@ def generate_captions(audio_path: str, script_text: str, out_srt_path: str) -> s
     words_json_path = str(Path(out_srt_path).with_suffix(".words.json"))
     Path(words_json_path).write_text(json.dumps(words, indent=2), encoding="utf-8")
 
-    return words_to_srt(words, out_srt_path)
+    return words_to_srt(words, out_srt_path), words

@@ -19,6 +19,7 @@ from faceless_pipeline.modules.video.captions import audio_duration_seconds, gen
 from faceless_pipeline.modules.video.metadata import write_metadata
 from faceless_pipeline.modules.video.procedural_background import generate_procedural_background
 from faceless_pipeline.modules.video.stock_footage import fetch_background_clips
+from faceless_pipeline.modules.video.storyboard import build_storyboard_background, compute_beat_timing
 from faceless_pipeline.modules.voice.run import generate_voiceover, script_to_narration_text
 from faceless_pipeline.modules.review.notify import notify_video_ready
 
@@ -63,8 +64,9 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
     audio_path = generate_voiceover(db, script_id, dry_run=dry_run, out_path=str(out_dir / "voice.wav"))
 
     srt_path = str(out_dir / "captions.srt")
+    words: list[dict] = []
     try:
-        generate_captions(audio_path, narration_text, srt_path)
+        srt_path, words = generate_captions(audio_path, narration_text, srt_path)
     except Exception:
         logger.exception("Caption generation failed, continuing without burned-in captions")
         srt_path = None
@@ -82,17 +84,30 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
     metadata_path = str(out_dir / "metadata.json")
 
     try:
-        clip_paths = fetch_background_clips(_keywords_from_topic(script.topic), str(out_dir / "clips"))
-        if clip_paths:
-            build_background(clip_paths, target_duration, background_path)
+        storyboard = script.script.get("storyboard")
+        beat_timing = compute_beat_timing(script.script, words) if storyboard and words else []
+
+        if storyboard and len(beat_timing) >= 2:
+            # Cut between a distinct background per beat instead of one
+            # static background for the whole video — the video actually
+            # follows the narration instead of just captioning over a
+            # loop. Falls back below for scripts generated before this
+            # feature existed, or when caption timing wasn't available.
+            build_storyboard_background(storyboard, beat_timing, str(out_dir / "storyboard_segments"), background_path)
         else:
-            # No Pexels/Pixabay key configured (or nothing matched) — this
-            # used to be a hard failure, so the pipeline could never
-            # produce a real video without first signing up for a stock
-            # footage API. Fall back to an animated gradient generated
-            # entirely by ffmpeg itself: no network call, no API key.
-            logger.info("No stock footage available — using a procedural background instead")
-            generate_procedural_background(target_duration, background_path, topic=script.topic)
+            clip_paths = fetch_background_clips(_keywords_from_topic(script.topic), str(out_dir / "clips"))
+            if clip_paths:
+                build_background(clip_paths, target_duration, background_path)
+            else:
+                # No Pexels/Pixabay key configured (or nothing matched) —
+                # this used to be a hard failure, so the pipeline could
+                # never produce a real video without first signing up
+                # for a stock footage API. Fall back to an animated
+                # gradient generated entirely by ffmpeg itself: no
+                # network call, no API key.
+                logger.info("No stock footage available — using a procedural background instead")
+                generate_procedural_background(target_duration, background_path, topic=script.topic)
+
         assemble_video(background_path, audio_path, srt_path, final_path)
         generate_thumbnail(final_path, thumbnail_path)
     except Exception:
