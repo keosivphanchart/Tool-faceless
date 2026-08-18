@@ -1,0 +1,39 @@
+# --- Core backend ---
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.35
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+python-multipart==0.0.9
+requests==2.32.3
+
+# --- Module 1: Trend finder ---
+pytrends==4.9.2            # Google Trends
+google-api-python-client==2.147.0  # YouTube trending
+praw==7.7.1                # Reddit trending
+rapidfuzz==3.9.7           # near-duplicate topic detection
+
+# --- Module 2: Script generator ---
+anthropic==0.34.2
+
+# --- Module 3: Voice generation ---
+# kokoro-onnx or kokoro (self-hosted TTS) — install per https://github.com/hexgrad/kokoro
+# kokoro>=0.3.4
+# soundfile==0.12.1
+# pydub==0.25.1            # loudness normalization
+
+# --- Module 4: Video assembly ---
+# faster-whisper==1.0.3    # word-level captions (heavy, install on demand)
+# ffmpeg must be installed on the system (not a pip package)
+
+# --- Module 6/8: Publisher & analytics (Google APIs) ---
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+
+# --- Analytics aggregation ---
+pandas==2.2.3
+
+# --- Testing ---
+pytest==8.3.3
+pytest-mock==3.14.0
