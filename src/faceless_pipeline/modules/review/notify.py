@@ -1,4 +1,7 @@
-"""Telegram / Discord notification when a new video is ready for review."""
+"""Telegram / Discord notifications: a new video ready for review, and
+(see automation/digest.py) periodic summary digests — both send through
+the same two channels, so the actual HTTP posting lives here once.
+"""
 import logging
 
 import requests
@@ -8,9 +11,7 @@ from faceless_pipeline.config import settings
 logger = logging.getLogger(__name__)
 
 
-def notify_video_ready(video_id: int, topic: str) -> None:
-    message = f"New video ready for review: '{topic}' (id={video_id})"
-
+def send_notification(message: str) -> None:
     if settings.telegram_bot_token and settings.telegram_chat_id:
         try:
             requests.post(
@@ -29,3 +30,7 @@ def notify_video_ready(video_id: int, topic: str) -> None:
 
     if not settings.telegram_bot_token and not settings.discord_webhook_url:
         logger.info("No Telegram/Discord configured; skipping notification: %s", message)
+
+
+def notify_video_ready(video_id: int, topic: str) -> None:
+    send_notification(f"New video ready for review: '{topic}' (id={video_id})")

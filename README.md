@@ -298,9 +298,30 @@ CSS custom properties (`index.css`), so switching just flips a
 - [ ] TikTok reporting API — stubbed, same app-review blocker as Module 6
 - [x] Performance stored linked to source topic + script style
 - [x] "What's working" aggregation (best hook style / topic by avg views) surfaced via `/api/analytics/best-performers` and the dashboard
-- [ ] Feeding top patterns back into the script generator's prompt — not
-      wired up yet; `best_performing_patterns()` returns exactly the data
-      needed to do this as a next step
+- [x] Feeding top patterns back into script generation — `AB_TEST_ENABLED`
+      (see Automation below) biases style selection toward whichever
+      style `best_performing_patterns()` ranks highest, with 20% random
+      exploration so the loop doesn't calcify on an early winner
+
+## Automation
+
+Everything below is opt-in and off by default — none of it changes how
+the pipeline behaves unless you deliberately turn it on in `.env`. See
+`.env.example` for every setting; the short version:
+
+| Setting | What it does |
+|---|---|
+| `AUTO_GENERATE_ENABLED` | Auto-generates (+ assembles) a script/video for the top N unused trends every time the trend finder runs — no manual topic pick. |
+| `AUTO_TREND_FINDER_ENABLED` | Runs the trend finder (and auto-generate, if also on) on a fixed interval instead of only on manual/external trigger. |
+| `POST /api/pipeline/trigger/full-cycle` | One call that runs trend finder + auto-generate together — for an external cron/n8n/Zapier hook that wants "do everything" in one request. Independent of the two settings above. |
+| `AUTO_APPROVE_ENABLED` | Skips the human review click for a video that passes basic safety checks (rendered file exists, storyboard complete, audio duration sane). Module 5's "one mandatory human checkpoint" stays the default — this has to be turned on deliberately. |
+| `POST /api/videos/batch-schedule` | Spreads a batch of pending videos across future slots (a content calendar) instead of scheduling one at a time. |
+| `RETRY_MAX_ATTEMPTS` / `RETRY_BACKOFF_SECONDS` | Script/video generation auto-retries a transient failure (exponential backoff) before it's recorded as failed, instead of dying on the first network blip. |
+| `AB_TEST_ENABLED` | Biases style selection toward the best-performing style so far (see Module 8 above). |
+| `HEALTH_CHECK_INTERVAL_MINUTES` | Always-on, free, no-network checks (ffmpeg present, active provider's key set, YouTube/TikTok authorized) that surface a dashboard toast the moment something breaks — not the next time a real run trips over it. |
+| `DIGEST_ENABLED` | Periodic Telegram/Discord summary (trends found, scripts generated, videos published, top performer) instead of only per-video "ready for review" pings. |
+| `DAILY_COST_BUDGET_USD` / `MONTHLY_COST_BUDGET_USD` | Refuses to start a new script generation once estimated LLM spend (real token usage × approximate per-provider pricing) hits either cap. In-memory tracking (resets on restart) — a guardrail, not a billing system. |
+| `CLEANUP_ENABLED` | Purges rejected videos (+ their rendered files) and superseded scripts older than `CLEANUP_RETENTION_DAYS`. |
 
 ## Data models
 

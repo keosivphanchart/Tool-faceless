@@ -9,15 +9,34 @@ from fastapi.responses import FileResponse
 from faceless_pipeline.api.router import api_router
 from faceless_pipeline.config import settings
 from faceless_pipeline.db import init_db
+from faceless_pipeline.modules.automation.cleanup import run_cleanup_loop
+from faceless_pipeline.modules.automation.digest import run_digest_loop
+from faceless_pipeline.modules.automation.health import run_health_check_loop
+from faceless_pipeline.modules.automation.scheduler import run_recurring_automation_loop
 from faceless_pipeline.modules.publisher.scheduler import run_scheduler_loop
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    scheduler_task = asyncio.create_task(run_scheduler_loop())
+
+    # publisher.scheduler's loop (dispatching scheduled publishes) always
+    # runs - it's the execution side of a feature (per-video schedule)
+    # that's always available, not itself opt-in. Everything else here is
+    # genuinely opt-in automation, off unless its setting says otherwise.
+    tasks = [asyncio.create_task(run_scheduler_loop())]
+    if settings.auto_trend_finder_enabled:
+        tasks.append(asyncio.create_task(run_recurring_automation_loop()))
+    tasks.append(asyncio.create_task(run_health_check_loop()))  # read-only, no cost - always safe to run
+    if settings.digest_enabled:
+        tasks.append(asyncio.create_task(run_digest_loop()))
+    if settings.cleanup_enabled:
+        tasks.append(asyncio.create_task(run_cleanup_loop()))
+
     yield
-    scheduler_task.cancel()
+
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(title="Faceless Content Pipeline", version="0.1.0", lifespan=lifespan)

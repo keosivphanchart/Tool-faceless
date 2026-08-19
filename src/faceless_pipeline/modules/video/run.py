@@ -130,7 +130,16 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
     db.commit()
     db.refresh(video)
 
-    notify_video_ready(video.id, script.topic)
+    from faceless_pipeline.modules.automation.auto_approve import maybe_auto_approve
+
+    # AUTO_APPROVE_ENABLED (opt-in, off by default): every path that
+    # produces a video funnels through here (manual trigger, auto-
+    # generate, full-cycle, regenerate), so this is the one place that
+    # needs to check it. Only notify a human "ready for review" if it
+    # actually still needs one - a video that just got auto-approved and
+    # sent to publish isn't waiting on anyone.
+    if not maybe_auto_approve(db, video.id):
+        notify_video_ready(video.id, script.topic)
 
     return video
 

@@ -68,6 +68,39 @@ class Settings(BaseSettings):
     # Module 8: Analytics
     youtube_analytics_token_file: str = "./secrets/youtube_analytics_token.json"
 
+    # Automation — all opt-in / off by default, so the pipeline's existing
+    # "one mandatory human checkpoint" behavior is unchanged unless you
+    # deliberately turn one of these on.
+    auto_generate_enabled: bool = False
+    auto_generate_count: int = 1
+    auto_generate_min_score: float = 0.0
+    auto_generate_style: str = "explainer"
+    auto_generate_length_variant: str = "30s"
+
+    auto_trend_finder_enabled: bool = False
+    auto_trend_finder_interval_hours: int = 24
+
+    auto_approve_enabled: bool = False
+    auto_approve_min_audio_seconds: float = 3.0
+
+    ab_test_enabled: bool = False
+    ab_test_styles: str = "explainer,listicle,story,hot_take"
+
+    health_check_interval_minutes: int = 30
+
+    digest_enabled: bool = False
+    digest_interval_hours: int = 24
+
+    daily_cost_budget_usd: float = 0.0  # 0 = unlimited
+    monthly_cost_budget_usd: float = 0.0  # 0 = unlimited
+
+    cleanup_enabled: bool = False
+    cleanup_retention_days: int = 30
+    cleanup_interval_hours: int = 24
+
+    retry_max_attempts: int = 3
+    retry_backoff_seconds: int = 30
+
     @property
     def trend_seed_keyword_list(self) -> list[str]:
         return [k.strip() for k in self.trend_seed_keywords.split(",") if k.strip()]
@@ -75,6 +108,10 @@ class Settings(BaseSettings):
     @property
     def reddit_subreddit_list(self) -> list[str]:
         return [s.strip() for s in self.reddit_subreddits.split(",") if s.strip()]
+
+    @property
+    def ab_test_style_list(self) -> list[str]:
+        return [s.strip() for s in self.ab_test_styles.split(",") if s.strip()]
 
 
 settings = Settings()

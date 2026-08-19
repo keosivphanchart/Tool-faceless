@@ -109,5 +109,15 @@ export const api = {
       script_provider: string;
       script_model: string;
       credentials_configured: Record<string, boolean>;
+      automation: {
+        auto_generate_enabled: boolean;
+        auto_trend_finder_enabled: boolean;
+        auto_approve_enabled: boolean;
+        ab_test_enabled: boolean;
+        digest_enabled: boolean;
+        cleanup_enabled: boolean;
+        daily_cost_budget_usd: number;
+        monthly_cost_budget_usd: number;
+      };
     }>("/settings"),
 };

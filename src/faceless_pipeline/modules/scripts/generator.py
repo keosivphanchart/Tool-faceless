@@ -134,6 +134,12 @@ def _call_anthropic(system_prompt: str, user_prompt: str) -> dict:
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
+    usage = getattr(message, "usage", None)
+    if usage is not None:
+        from faceless_pipeline.modules.automation.cost import record_cost
+
+        record_cost("anthropic", settings.script_model, usage.input_tokens, usage.output_tokens)
+
     raw_text = "".join(block.text for block in message.content if block.type == "text")
     return _parse_json_response(raw_text, "Claude")
 
@@ -205,7 +211,15 @@ def _call_openai_compatible(
     except requests.exceptions.HTTPError as exc:
         raise RuntimeError(f"{provider_name} API error ({response.status_code}): {response.text[:300]}") from exc
 
-    raw_text = response.json()["choices"][0]["message"]["content"]
+    payload = response.json()
+    usage = payload.get("usage") or {}
+    from faceless_pipeline.modules.automation.cost import record_cost
+
+    record_cost(
+        provider_name.lower(), model, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+    )
+
+    raw_text = payload["choices"][0]["message"]["content"]
     return _parse_json_response(raw_text, provider_name)
 
 
@@ -245,7 +259,15 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> dict:
     except requests.exceptions.HTTPError as exc:
         raise RuntimeError(f"Gemini API error ({response.status_code}): {response.text[:300]}") from exc
 
-    raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    payload = response.json()
+    usage = payload.get("usageMetadata") or {}
+    from faceless_pipeline.modules.automation.cost import record_cost
+
+    record_cost(
+        "gemini", settings.gemini_model, usage.get("promptTokenCount", 0), usage.get("candidatesTokenCount", 0)
+    )
+
+    raw_text = payload["candidates"][0]["content"]["parts"][0]["text"]
     return _parse_json_response(raw_text, "Gemini")
 
 
@@ -262,6 +284,10 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict:
     call = _PROVIDERS.get(settings.script_provider)
     if call is None:
         raise RuntimeError(f"Unknown SCRIPT_PROVIDER '{settings.script_provider}' — use one of {sorted(_PROVIDERS)}")
+
+    from faceless_pipeline.modules.automation.cost import check_budget
+
+    check_budget()  # raises BudgetExceeded if DAILY/MONTHLY_COST_BUDGET_USD is already hit; no-op if both are 0 (default)
 
     script_json = call(system_prompt, user_prompt)
     script_json["storyboard"] = _validate_storyboard(script_json.get("storyboard"), script_json)

@@ -1,7 +1,7 @@
 """Module 5: Review checkpoint. The one place a human touches the
 pipeline before anything goes public.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import get_db
 from faceless_pipeline.models import Script, Video, VideoStatus
+from faceless_pipeline.utils import normalize_to_naive_utc
 
 router = APIRouter()
 
@@ -18,17 +19,19 @@ class ApproveRequest(BaseModel):
 
     @field_validator("scheduled_for")
     @classmethod
-    def _normalize_to_naive_utc(cls, value: datetime | None) -> datetime | None:
-        # The dashboard sends `new Date(...).toISOString()`, which is
-        # timezone-aware (a "Z" offset) — but every other datetime in
-        # this codebase (Trend.created_at, Performance.pulled_at, and
-        # datetime.utcnow() itself, used to check whether a schedule is
-        # due) is naive UTC. Comparing an aware and a naive datetime
-        # raises TypeError, so normalize once here rather than at every
-        # comparison site downstream.
-        if value is not None and value.tzinfo is not None:
-            return value.astimezone(timezone.utc).replace(tzinfo=None)
-        return value
+    def _normalize(cls, value: datetime | None) -> datetime | None:
+        return normalize_to_naive_utc(value)
+
+
+class BatchScheduleRequest(BaseModel):
+    video_ids: list[int]
+    start_at: datetime
+    interval_hours: float = 24
+
+    @field_validator("start_at")
+    @classmethod
+    def _normalize(cls, value: datetime) -> datetime:
+        return normalize_to_naive_utc(value)
 
 
 class RejectRequest(BaseModel):
@@ -110,6 +113,50 @@ def unschedule_video(video_id: int, db: Session = Depends(get_db)):
     video.scheduled_for = None
     db.commit()
     return _serialize(video)
+
+
+@router.post("/batch-schedule")
+def batch_schedule(req: BatchScheduleRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Spreads a batch of pending videos across the next N slots
+    (start_at, start_at + interval_hours, start_at + 2*interval_hours,
+    ...) instead of scheduling one at a time - a content calendar in one
+    call. Only videos still 'pending' are picked up; anything else in
+    video_ids (already approved/rejected/published) is silently skipped
+    rather than failing the whole batch over one stale id.
+    """
+    if not req.video_ids:
+        raise HTTPException(status_code=400, detail="video_ids must not be empty")
+    if req.start_at <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="start_at must be in the future")
+
+    from faceless_pipeline.api.pipeline import record_run
+    from faceless_pipeline.db import SessionLocal
+    from faceless_pipeline.modules.publisher.run import publish_video
+
+    scheduled = []
+    for i, video_id in enumerate(req.video_ids):
+        video = db.get(Video, video_id)
+        if video is None or video.status != VideoStatus.pending:
+            continue
+
+        video.status = VideoStatus.approved
+        db.commit()
+        publish_at = req.start_at + timedelta(hours=req.interval_hours * i)
+
+        def _job(vid: int = video_id, when: datetime = publish_at):
+            session = SessionLocal()
+            try:
+                publish_video(session, vid, scheduled_for=when)
+                record_run("publish", "success", f"video {vid} batch-scheduled for {when.isoformat()}")
+            except Exception as exc:
+                record_run("publish", "error", f"video {vid} batch-schedule failed: {exc}")
+            finally:
+                session.close()
+
+        background_tasks.add_task(_job)
+        scheduled.append({"video_id": video_id, "scheduled_for": publish_at.isoformat()})
+
+    return {"scheduled": scheduled}
 
 
 @router.get("/{video_id}")

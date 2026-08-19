@@ -72,6 +72,41 @@ export default function Settings() {
           </tbody>
         </table>
       </NeuCard>
+
+      <NeuCard>
+        <h3 className="text-sm font-medium text-neu-muted mb-3">
+          Automation — all opt-in, set in <code className="text-neu-text">.env</code>
+        </h3>
+        <table className="w-full text-sm">
+          <tbody className="divide-y divide-neu-shadowDark/60">
+            {[
+              ["AUTO_GENERATE_ENABLED", status.automation.auto_generate_enabled],
+              ["AUTO_TREND_FINDER_ENABLED", status.automation.auto_trend_finder_enabled],
+              ["AUTO_APPROVE_ENABLED", status.automation.auto_approve_enabled],
+              ["AB_TEST_ENABLED", status.automation.ab_test_enabled],
+              ["DIGEST_ENABLED", status.automation.digest_enabled],
+              ["CLEANUP_ENABLED", status.automation.cleanup_enabled],
+            ].map(([key, on]) => (
+              <tr key={key as string}>
+                <td className="py-2">{key}</td>
+                <td className="py-2">
+                  <NeuToggle on={on as boolean} label={on ? "on" : "off"} />
+                </td>
+              </tr>
+            ))}
+            <tr>
+              <td className="py-2">Daily / monthly LLM budget</td>
+              <td className="py-2 text-neu-muted">
+                {status.automation.daily_cost_budget_usd > 0 ? `$${status.automation.daily_cost_budget_usd}/day` : "unlimited"}
+                {" · "}
+                {status.automation.monthly_cost_budget_usd > 0
+                  ? `$${status.automation.monthly_cost_budget_usd}/mo`
+                  : "unlimited"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </NeuCard>
     </div>
   );
 }

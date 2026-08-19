@@ -44,4 +44,14 @@ def settings_status():
             "youtube_oauth_client": Path(settings.youtube_client_secrets_file).is_file(),
             "tiktok_client_key": bool(settings.tiktok_client_key),
         },
+        "automation": {
+            "auto_generate_enabled": settings.auto_generate_enabled,
+            "auto_trend_finder_enabled": settings.auto_trend_finder_enabled,
+            "auto_approve_enabled": settings.auto_approve_enabled,
+            "ab_test_enabled": settings.ab_test_enabled,
+            "digest_enabled": settings.digest_enabled,
+            "cleanup_enabled": settings.cleanup_enabled,
+            "daily_cost_budget_usd": settings.daily_cost_budget_usd,
+            "monthly_cost_budget_usd": settings.monthly_cost_budget_usd,
+        },
     }
