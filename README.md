@@ -203,6 +203,13 @@ so a missing/broken source never blocks the others.
       generated before this feature) or when caption timing isn't
       available.
 - [x] ffmpeg pipeline: background + voiceover + burned-in captions (`assemble.py`)
+- [x] Animated karaoke-style captions: word-by-word color highlight sweep
+  + a brief scale-up "pop" as each word becomes active (the CapCut/TikTok
+  look), built on ASS `\kf` karaoke-fill and `\t()` transform tags —
+  rendered natively by libass (the engine ffmpeg's `subtitles` filter
+  already used for plain SRT), so no new dependency. Timing comes
+  straight from the same per-word timestamps `compute_beat_timing`
+  already relies on (`words_to_ass` in `captions.py`).
 - [x] Vertical 9:16 output (1080x1920 scale+crop)
 - [x] Background music mix under the voiceover (`amix` filter)
 - [x] Thumbnail frame extraction

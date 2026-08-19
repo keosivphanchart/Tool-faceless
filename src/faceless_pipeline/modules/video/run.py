@@ -63,13 +63,13 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
 
     audio_path = generate_voiceover(db, script_id, dry_run=dry_run, out_path=str(out_dir / "voice.wav"))
 
-    srt_path = str(out_dir / "captions.srt")
+    captions_path = str(out_dir / "captions.ass")
     words: list[dict] = []
     try:
-        srt_path, words = generate_captions(audio_path, narration_text, srt_path)
+        captions_path, words = generate_captions(audio_path, narration_text, captions_path)
     except Exception:
         logger.exception("Caption generation failed, continuing without burned-in captions")
-        srt_path = None
+        captions_path = None
 
     # Must be the *actual* rendered audio length, not a pre-TTS word-count
     # estimate: assemble_video() below uses ffmpeg's -shortest, so if the
@@ -108,7 +108,7 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
                 logger.info("No stock footage available — using a procedural background instead")
                 generate_procedural_background(target_duration, background_path, topic=script.topic)
 
-        assemble_video(background_path, audio_path, srt_path, final_path)
+        assemble_video(background_path, audio_path, captions_path, final_path)
         generate_thumbnail(final_path, thumbnail_path)
     except Exception:
         logger.exception(
@@ -125,7 +125,7 @@ def assemble_pipeline(db: Session, script_id: int, dry_run: bool = False) -> Vid
     video.file_path = final_path
     video.thumbnail_path = thumbnail_path
     video.audio_path = audio_path
-    video.captions_path = srt_path
+    video.captions_path = captions_path
     video.metadata_path = metadata_path
     db.commit()
     db.refresh(video)

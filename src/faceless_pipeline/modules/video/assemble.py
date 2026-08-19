@@ -112,7 +112,7 @@ def build_background(clip_paths: list[str], duration_seconds: float, out_path: s
 def assemble_video(
     background_path: str,
     voiceover_path: str,
-    srt_path: str | None,
+    captions_path: str | None,
     out_path: str,
     music_path: str | None = None,
     music_volume_db: float = -18.0,
@@ -134,13 +134,13 @@ def assemble_video(
         audio_map = "[aout]"
 
     video_map = "0:v"
-    if srt_path and Path(srt_path).exists():
-        escaped_srt = srt_path.replace(":", "\\:")
-        filter_parts.append(
-            f"[0:v]subtitles='{escaped_srt}':force_style="
-            "'FontName=Arial,FontSize=16,PrimaryColour=&HFFFFFF&,"
-            "OutlineColour=&H000000&,BorderStyle=3,Outline=2,Alignment=2'[vout]"
-        )
+    if captions_path and Path(captions_path).exists():
+        # No force_style here: captions.py's words_to_ass() already embeds
+        # a [V4+ Styles] section (colors, font, karaoke fill) — force_style
+        # would override PrimaryColour/SecondaryColour and kill the
+        # word-by-word karaoke highlight it sets up.
+        escaped_captions = captions_path.replace(":", "\\:")
+        filter_parts.append(f"[0:v]subtitles='{escaped_captions}'[vout]")
         video_map = "[vout]"
 
     cmd = [settings.ffmpeg_binary, "-y", *inputs]
