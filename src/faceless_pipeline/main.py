@@ -13,6 +13,7 @@ from faceless_pipeline.modules.automation.cleanup import run_cleanup_loop
 from faceless_pipeline.modules.automation.digest import run_digest_loop
 from faceless_pipeline.modules.automation.health import run_health_check_loop
 from faceless_pipeline.modules.automation.scheduler import run_recurring_automation_loop
+from faceless_pipeline.modules.publisher.recurring import run_recurring_posting_loop
 from faceless_pipeline.modules.publisher.scheduler import run_scheduler_loop
 
 
@@ -20,11 +21,14 @@ from faceless_pipeline.modules.publisher.scheduler import run_scheduler_loop
 async def lifespan(app: FastAPI):
     init_db()
 
-    # publisher.scheduler's loop (dispatching scheduled publishes) always
-    # runs - it's the execution side of a feature (per-video schedule)
-    # that's always available, not itself opt-in. Everything else here is
-    # genuinely opt-in automation, off unless its setting says otherwise.
-    tasks = [asyncio.create_task(run_scheduler_loop())]
+    # publisher.scheduler's loop (dispatching per-video scheduled
+    # publishes) and publisher.recurring's loop (dispatching recurring
+    # posting slots) always run - both are the execution side of a
+    # feature that's always available, not itself opt-in (an empty slot
+    # list just makes recurring's loop a no-op tick). Everything else
+    # here is genuinely opt-in automation, off unless its setting says
+    # otherwise.
+    tasks = [asyncio.create_task(run_scheduler_loop()), asyncio.create_task(run_recurring_posting_loop())]
     if settings.auto_trend_finder_enabled:
         tasks.append(asyncio.create_task(run_recurring_automation_loop()))
     tasks.append(asyncio.create_task(run_health_check_loop()))  # read-only, no cost - always safe to run

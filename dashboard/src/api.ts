@@ -56,6 +56,23 @@ export interface ReviewVideo {
   created_at: string;
 }
 
+export interface PostingSlot {
+  id: number;
+  label: string;
+  days_of_week: number[];
+  time_of_day: string;
+  platforms: string[] | null;
+  enabled: boolean;
+  last_fired_date: string | null;
+  created_at: string;
+}
+
+export interface BestPostingTime {
+  hour: number;
+  avg_views: number;
+  sample_count: number;
+}
+
 export const api = {
   pipelineStatus: () => request<{ stages: any[] }>("/pipeline/status"),
   pipelineEvents: (after: number) =>
@@ -100,6 +117,16 @@ export const api = {
 
   performance: () => request<any[]>("/analytics/performance"),
   bestPerformers: () => request<{ by_style: any[]; by_topic: any[] }>("/analytics/best-performers"),
+  bestPostingTimes: () => request<Record<string, BestPostingTime[]>>("/analytics/best-times"),
+
+  listSlots: () => request<PostingSlot[]>("/publish/slots"),
+  createSlot: (slot: { label: string; days_of_week: number[]; time_of_day: string; platforms: string[] | null }) =>
+    request<PostingSlot>("/publish/slots", { method: "POST", body: JSON.stringify(slot) }),
+  updateSlot: (
+    id: number,
+    patch: Partial<{ label: string; days_of_week: number[]; time_of_day: string; platforms: string[] | null; enabled: boolean }>
+  ) => request<PostingSlot>(`/publish/slots/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteSlot: (id: number) => request(`/publish/slots/${id}`, { method: "DELETE" }),
 
   accountsStatus: () =>
     request<{

@@ -86,6 +86,7 @@ def publish_video(db: Session, video_id: int, platforms: list[str] | None = None
     video.platform_ids = platform_ids
     if platform_ids:
         video.status = VideoStatus.published
+        video.published_at = datetime.utcnow()
     db.commit()
     db.refresh(video)
     return video

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from faceless_pipeline.db import get_db
 from faceless_pipeline.models import Performance
-from faceless_pipeline.modules.analytics.run import best_performing_patterns, pull_all_performance
+from faceless_pipeline.modules.analytics.run import best_performing_patterns, best_posting_times, pull_all_performance
 
 router = APIRouter()
 
@@ -33,6 +33,11 @@ def list_performance(video_id: int | None = None, db: Session = Depends(get_db))
 @router.get("/best-performers")
 def best_performers(db: Session = Depends(get_db)):
     return best_performing_patterns(db)
+
+
+@router.get("/best-times")
+def best_times(db: Session = Depends(get_db)):
+    return best_posting_times(db)
 
 
 @router.post("/pull")
