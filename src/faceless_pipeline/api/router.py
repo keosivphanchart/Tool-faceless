@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from faceless_pipeline.modules.analytics.api import router as analytics_router
+from faceless_pipeline.modules.automation.api import router as automation_router
 from faceless_pipeline.modules.publisher.accounts_api import router as accounts_router
 from faceless_pipeline.modules.publisher.api import router as publisher_router
 from faceless_pipeline.modules.publisher.slots_api import router as slots_router
@@ -24,3 +25,4 @@ api_router.include_router(accounts_router, prefix="/publish/accounts", tags=["ac
 api_router.include_router(slots_router, prefix="/publish/slots", tags=["slots"])
 api_router.include_router(publisher_router, prefix="/publish", tags=["publisher"])
 api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(automation_router, prefix="/automation", tags=["automation"])

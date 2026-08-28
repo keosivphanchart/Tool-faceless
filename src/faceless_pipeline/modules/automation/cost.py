@@ -68,6 +68,37 @@ def monthly_spend() -> float:
     return spend_since(datetime.utcnow() - timedelta(days=30))
 
 
+def spend_summary() -> dict:
+    """Everything the dashboard's cost card needs in one call: current
+    daily/monthly spend against their caps (0 = unlimited, same meaning
+    as the settings themselves), spend broken down by day (for a trend
+    chart) and by provider (for a breakdown), and how many calls that's
+    based on. Same in-memory, resets-on-restart caveat as the rest of
+    this module - a rough running total, not a billing record.
+    """
+    with _lock:
+        records = list(_records)
+
+    by_day: dict[str, float] = {}
+    by_provider: dict[str, float] = {}
+    for r in records:
+        day = r["at"].date().isoformat()
+        by_day[day] = by_day.get(day, 0.0) + r["cost_usd"]
+        by_provider[r["provider"]] = by_provider.get(r["provider"], 0.0) + r["cost_usd"]
+
+    return {
+        "daily_spend_usd": round(daily_spend(), 4),
+        "daily_budget_usd": settings.daily_cost_budget_usd,
+        "monthly_spend_usd": round(monthly_spend(), 4),
+        "monthly_budget_usd": settings.monthly_cost_budget_usd,
+        "total_calls": len(records),
+        "by_day": [{"date": d, "cost_usd": round(c, 4)} for d, c in sorted(by_day.items())],
+        "by_provider": [
+            {"provider": p, "cost_usd": round(c, 4)} for p, c in sorted(by_provider.items(), key=lambda kv: -kv[1])
+        ],
+    }
+
+
 def check_budget() -> None:
     """Raises BudgetExceeded if a configured (non-zero) cap has already
     been hit. Call before starting a new generation, not after -

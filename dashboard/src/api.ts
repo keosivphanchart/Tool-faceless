@@ -73,6 +73,29 @@ export interface BestPostingTime {
   sample_count: number;
 }
 
+export interface PerformanceRow {
+  id: number;
+  video_id: number;
+  topic: string;
+  platform: string;
+  views: number;
+  retention_pct: number;
+  completion_pct: number;
+  likes: number;
+  shares: number;
+  pulled_at: string;
+}
+
+export interface SpendSummary {
+  daily_spend_usd: number;
+  daily_budget_usd: number;
+  monthly_spend_usd: number;
+  monthly_budget_usd: number;
+  total_calls: number;
+  by_day: { date: string; cost_usd: number }[];
+  by_provider: { provider: string; cost_usd: number }[];
+}
+
 export const api = {
   pipelineStatus: () => request<{ stages: any[] }>("/pipeline/status"),
   pipelineEvents: (after: number) =>
@@ -122,9 +145,11 @@ export const api = {
 
   publishHistory: () => request<any[]>("/publish/history"),
 
-  performance: () => request<any[]>("/analytics/performance"),
+  performance: () => request<PerformanceRow[]>("/analytics/performance"),
   bestPerformers: () => request<{ by_style: any[]; by_topic: any[] }>("/analytics/best-performers"),
   bestPostingTimes: () => request<Record<string, BestPostingTime[]>>("/analytics/best-times"),
+
+  spendSummary: () => request<SpendSummary>("/automation/spend"),
 
   listSlots: () => request<PostingSlot[]>("/publish/slots"),
   createSlot: (slot: { label: string; days_of_week: number[]; time_of_day: string; platforms: string[] | null }) =>
