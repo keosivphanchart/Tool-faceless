@@ -43,6 +43,7 @@ def settings_status():
             "discord_webhook_url": bool(settings.discord_webhook_url),
             "youtube_oauth_client": Path(settings.youtube_client_secrets_file).is_file(),
             "tiktok_client_key": bool(settings.tiktok_client_key),
+            "instagram_app_id": bool(settings.instagram_app_id),
         },
         "automation": {
             "auto_generate_enabled": settings.auto_generate_enabled,

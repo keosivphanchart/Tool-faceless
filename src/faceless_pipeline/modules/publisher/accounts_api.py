@@ -1,8 +1,9 @@
 """Dashboard-driven connect/disconnect for the publish-account credentials
-(YouTube upload, TikTok video.publish). Lets a first-time setup authorize
-an account by clicking a button in the Settings page instead of running a
-script by hand — the OAuth app credentials (client key/secret) still have
-to be set in .env first, this only replaces the interactive consent step.
+(YouTube upload, TikTok video.publish, Instagram Reels). Lets a first-time
+setup authorize an account by clicking a button in the Settings page
+instead of running a script by hand — the OAuth app credentials (client
+key/secret) still have to be set in .env first, this only replaces the
+interactive consent step.
 """
 import logging
 
@@ -10,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 
 from faceless_pipeline.config import settings
-from faceless_pipeline.modules.publisher import tiktok, youtube
+from faceless_pipeline.modules.publisher import instagram, tiktok, youtube
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,10 @@ def accounts_status():
         "tiktok": {
             "configured": bool(settings.tiktok_client_key and settings.tiktok_client_secret),
             "connected": tiktok.is_connected(),
+        },
+        "instagram": {
+            "configured": bool(settings.instagram_app_id and settings.instagram_app_secret),
+            "connected": instagram.is_connected(),
         },
     }
 
@@ -80,4 +85,30 @@ def tiktok_callback(code: str | None = None, error: str | None = None):
 @router.post("/tiktok/disconnect")
 def tiktok_disconnect():
     tiktok.disconnect()
+    return {"connected": False}
+
+
+@router.get("/instagram/connect")
+def instagram_connect():
+    try:
+        return RedirectResponse(instagram.build_authorize_url())
+    except instagram.InstagramNotConfigured as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/instagram/callback")
+def instagram_callback(code: str | None = None, error: str | None = None):
+    if error:
+        return RedirectResponse(f"{settings.dashboard_url}/settings?error=instagram_{error}")
+    try:
+        instagram.complete_authorization(code)
+    except Exception:
+        logger.exception("Instagram OAuth callback failed")
+        return RedirectResponse(f"{settings.dashboard_url}/settings?error=instagram_authorization_failed")
+    return RedirectResponse(f"{settings.dashboard_url}/settings?connected=instagram")
+
+
+@router.post("/instagram/disconnect")
+def instagram_disconnect():
+    instagram.disconnect()
     return {"connected": False}

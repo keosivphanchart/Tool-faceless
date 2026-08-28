@@ -103,6 +103,13 @@ export const api = {
   rejectVideo: (id: number, note?: string) =>
     request(`/videos/${id}/reject`, { method: "POST", body: JSON.stringify({ note }) }),
   listScheduled: () => request<ReviewVideo[]>("/videos/scheduled/upcoming"),
+  // Spreads video_ids across start_at, start_at + interval_hours, + 2*interval_hours, ...
+  // — only videos still "pending" are picked up, per the endpoint's own doc.
+  batchSchedule: (videoIds: number[], startAt: string, intervalHours: number) =>
+    request<{ scheduled: { video_id: number; scheduled_for: string }[] }>("/videos/batch-schedule", {
+      method: "POST",
+      body: JSON.stringify({ video_ids: videoIds, start_at: startAt, interval_hours: intervalHours }),
+    }),
   unscheduleVideo: (id: number) => request<ReviewVideo>(`/videos/${id}/unschedule`, { method: "POST" }),
   // The rewrite/reassembly runs as a background job on the server, so
   // this only confirms the job was queued — new_script_id/new_video_id
@@ -132,9 +139,11 @@ export const api = {
     request<{
       youtube: { configured: boolean; connected: boolean };
       tiktok: { configured: boolean; connected: boolean };
+      instagram: { configured: boolean; connected: boolean };
     }>("/publish/accounts/status"),
   disconnectYouTube: () => request("/publish/accounts/youtube/disconnect", { method: "POST" }),
   disconnectTikTok: () => request("/publish/accounts/tiktok/disconnect", { method: "POST" }),
+  disconnectInstagram: () => request("/publish/accounts/instagram/disconnect", { method: "POST" }),
 
   settingsStatus: () =>
     request<{

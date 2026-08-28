@@ -5,12 +5,147 @@ import { useToast } from "../components/Toasts";
 
 type Action = "approve" | "schedule" | "reject" | "regenerate-script" | "regenerate-video";
 
+function BulkActionBar({
+  videos,
+  selected,
+  setSelected,
+  onDone,
+}: {
+  videos: ReviewVideo[];
+  selected: Set<number>;
+  setSelected: (s: Set<number>) => void;
+  onDone: () => void;
+}) {
+  const { notify } = useToast();
+  const [busy, setBusy] = useState<"approve" | "schedule" | "reject" | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [intervalHours, setIntervalHours] = useState("24");
+
+  const ids = Array.from(selected);
+  const allSelected = videos.length > 0 && selected.size === videos.length;
+
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(videos.map((v) => v.id)));
+  }
+
+  function summarize(label: string, results: PromiseSettledResult<unknown>[]) {
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const ok = results.length - failed;
+    if (failed === 0) {
+      notify("success", `${label}: ${ok} video${ok === 1 ? "" : "s"}`);
+    } else {
+      notify("error", `${label}: ${ok} succeeded, ${failed} failed`, "Check individual videos for details.");
+    }
+  }
+
+  async function bulkApprove() {
+    setBusy("approve");
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.approveVideo(id)));
+      summarize("Approved", results);
+      setSelected(new Set());
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function bulkReject() {
+    if (!window.confirm(`Reject ${ids.length} selected video${ids.length === 1 ? "" : "s"}?`)) return;
+    setBusy("reject");
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.rejectVideo(id, rejectNote)));
+      summarize("Rejected", results);
+      setSelected(new Set());
+      setRejectNote("");
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function bulkSchedule() {
+    if (!scheduleAt) {
+      notify("error", "Pick a start date/time first");
+      return;
+    }
+    setBusy("schedule");
+    try {
+      const iso = new Date(scheduleAt).toISOString();
+      const { scheduled } = await api.batchSchedule(ids, iso, parseFloat(intervalHours) || 24);
+      notify(
+        "success",
+        `Scheduled ${scheduled.length} video${scheduled.length === 1 ? "" : "s"}`,
+        `Starting ${new Date(scheduleAt).toLocaleString()}, ${intervalHours}h apart — see Scheduled.`
+      );
+      setSelected(new Set());
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <NeuCard className="flex flex-wrap items-center gap-3">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+        {selected.size > 0 ? `${selected.size} selected` : "Select all"}
+      </label>
+
+      {selected.size > 0 && (
+        <>
+          <NeuButton variant="success" disabled={!!busy} loading={busy === "approve"} onClick={bulkApprove}>
+            Approve {selected.size} now
+          </NeuButton>
+
+          <div className="flex items-center gap-1.5">
+            <NeuInput
+              type="datetime-local"
+              className="text-xs"
+              value={scheduleAt}
+              onChange={(e) => setScheduleAt(e.target.value)}
+              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+            />
+            <NeuInput
+              type="number"
+              min="0.5"
+              step="0.5"
+              className="w-16 text-xs"
+              value={intervalHours}
+              onChange={(e) => setIntervalHours(e.target.value)}
+              title="Hours between each video's publish time"
+            />
+            <span className="text-xs text-neu-muted">hrs apart</span>
+            <NeuButton disabled={!!busy} loading={busy === "schedule"} onClick={bulkSchedule}>
+              Schedule {selected.size}
+            </NeuButton>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <NeuInput
+              placeholder="Reject note (optional)"
+              className="text-xs w-40"
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+            />
+            <NeuButton variant="danger" disabled={!!busy} loading={busy === "reject"} onClick={bulkReject}>
+              Reject {selected.size}
+            </NeuButton>
+          </div>
+        </>
+      )}
+    </NeuCard>
+  );
+}
+
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
   const [scheduleAt, setScheduleAt] = useState<Record<number, string>>({});
   const [regenerating, setRegenerating] = useState<Set<number>>(new Set());
   const [actionBusy, setActionBusy] = useState<Record<number, Action | undefined>>({});
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const { notify } = useToast();
 
   const load = () => api.listPendingVideos().then(setVideos);
@@ -122,6 +257,15 @@ export default function ReviewQueue() {
     }
   }
 
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Review queue ({videos.length} pending)</h2>
@@ -132,11 +276,16 @@ export default function ReviewQueue() {
         </p>
       )}
 
+      {videos.length > 0 && <BulkActionBar videos={videos} selected={selected} setSelected={setSelected} onDone={load} />}
+
       {videos.map((v) => {
         const busy = actionBusy[v.id];
         return (
           <NeuCard key={v.id} className="space-y-4">
             <div className="flex gap-4">
+              <label className="flex items-start pt-1">
+                <input type="checkbox" checked={selected.has(v.id)} onChange={() => toggleSelected(v.id)} />
+              </label>
               {v.file_path ? (
                 <video
                   controls

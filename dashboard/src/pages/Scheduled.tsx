@@ -4,7 +4,7 @@ import { NeuBadge, NeuButton, NeuCard, NeuInput, NeuToggle } from "../components
 import { useToast } from "../components/Toasts";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const PLATFORM_LABELS: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok" };
+const PLATFORM_LABELS: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" };
 
 function formatHour(hour: number): string {
   return `${hour.toString().padStart(2, "0")}:00 UTC`;

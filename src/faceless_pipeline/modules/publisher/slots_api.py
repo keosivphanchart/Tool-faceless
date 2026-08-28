@@ -7,7 +7,7 @@ from faceless_pipeline.models import PostingSlot
 
 router = APIRouter()
 
-VALID_PLATFORMS = {"youtube", "tiktok"}
+VALID_PLATFORMS = {"youtube", "tiktok", "instagram"}
 
 
 def _validate_days(value: list[int]) -> list[int]:

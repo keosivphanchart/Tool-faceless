@@ -65,8 +65,21 @@ class Settings(BaseSettings):
     tiktok_token_file: str = "./secrets/tiktok_token.json"
     tiktok_redirect_uri: str = "http://localhost:8000/api/publish/accounts/tiktok/callback"
     tiktok_default_privacy_level: str = "SELF_ONLY"  # safest default: visible only to the posting account
+    instagram_app_id: str = ""
+    instagram_app_secret: str = ""
+    instagram_api_base_url: str = "https://graph.facebook.com/v19.0"
+    instagram_token_file: str = "./secrets/instagram_token.json"
+    instagram_redirect_uri: str = "http://localhost:8000/api/publish/accounts/instagram/callback"
+    # Instagram's Content Publishing API fetches the video from a URL you
+    # give it rather than accepting a direct upload (unlike YouTube/TikTok)
+    # - this has to be the backend's own publicly reachable origin (the
+    # one serving GET /media) for that fetch to succeed. Empty = Instagram
+    # publishing is unavailable, since localhost isn't fetchable from
+    # Meta's servers.
+    public_base_url: str = ""
     # Where the dashboard is served from - the connect flow redirects the
-    # browser back here (to /settings) once YouTube/TikTok OAuth finishes.
+    # browser back here (to /settings) once YouTube/TikTok/Instagram OAuth
+    # finishes.
     dashboard_url: str = "http://localhost:5173"
 
     # Module 8: Analytics

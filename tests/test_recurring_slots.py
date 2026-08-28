@@ -218,9 +218,26 @@ def test_create_slot_rejects_unknown_platform(db_session):
     app.dependency_overrides[get_db] = _override_get_db
     try:
         resp = client.post(
-            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "18:00", "platforms": ["instagram"]}
+            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "18:00", "platforms": ["facebook"]}
         )
         assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_create_slot_accepts_instagram_as_a_platform(db_session):
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        resp = client.post(
+            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "18:00", "platforms": ["instagram"]}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["platforms"] == ["instagram"]
     finally:
         app.dependency_overrides.clear()
 

@@ -3,7 +3,19 @@ import { api } from "../api";
 import { NeuBadge, NeuButton, NeuCard, NeuToggle } from "../components/Neu";
 import { useToast } from "../components/Toasts";
 
-const PLATFORM_LABEL = { youtube: "YouTube", tiktok: "TikTok" } as const;
+const PLATFORM_LABEL = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" } as const;
+type Platform = keyof typeof PLATFORM_LABEL;
+const PLATFORM_ORDER: Platform[] = ["youtube", "tiktok", "instagram"];
+const REQUIRED_ENV_VAR: Record<Platform, string> = {
+  youtube: "YOUTUBE_CLIENT_SECRETS_FILE",
+  tiktok: "TIKTOK_CLIENT_KEY",
+  instagram: "INSTAGRAM_APP_ID",
+};
+const DISCONNECT_FN: Record<Platform, () => Promise<unknown>> = {
+  youtube: api.disconnectYouTube,
+  tiktok: api.disconnectTikTok,
+  instagram: api.disconnectInstagram,
+};
 
 function ConnectAccountsCard({
   accounts,
@@ -15,11 +27,10 @@ function ConnectAccountsCard({
   const { notify } = useToast();
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
-  async function disconnect(platform: "youtube" | "tiktok") {
+  async function disconnect(platform: Platform) {
     setDisconnecting(platform);
     try {
-      if (platform === "youtube") await api.disconnectYouTube();
-      else await api.disconnectTikTok();
+      await DISCONNECT_FN[platform]();
       notify("success", `${PLATFORM_LABEL[platform]} disconnected`);
       reload();
     } catch (err) {
@@ -34,7 +45,7 @@ function ConnectAccountsCard({
       <h3 className="text-sm font-medium text-neu-muted mb-3">Connected accounts</h3>
       <table className="w-full text-sm">
         <tbody className="divide-y divide-neu-shadowDark/60">
-          {(["youtube", "tiktok"] as const).map((platform) => {
+          {PLATFORM_ORDER.map((platform) => {
             const account = accounts[platform];
             return (
               <tr key={platform}>
@@ -61,9 +72,7 @@ function ConnectAccountsCard({
                       Connect {PLATFORM_LABEL[platform]}
                     </NeuButton>
                   ) : (
-                    <span className="text-xs text-neu-muted">
-                      Set {platform === "youtube" ? "YOUTUBE_CLIENT_SECRETS_FILE" : "TIKTOK_CLIENT_KEY"} in .env first
-                    </span>
+                    <span className="text-xs text-neu-muted">Set {REQUIRED_ENV_VAR[platform]} in .env first</span>
                   )}
                 </td>
               </tr>
@@ -92,7 +101,7 @@ export default function Settings() {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     const error = params.get("error");
-    if (connected) notify("success", `${PLATFORM_LABEL[connected as "youtube" | "tiktok"] ?? connected} connected`);
+    if (connected) notify("success", `${PLATFORM_LABEL[connected as Platform] ?? connected} connected`);
     if (error) notify("error", "Failed to connect account", error);
     if (connected || error) window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -106,7 +115,7 @@ export default function Settings() {
         <p className="text-sm text-neu-muted mt-1">
           API keys live in <code className="text-neu-text">.env</code> only and are never sent to this
           dashboard — this page shows configuration status, not values. Edit <code>.env</code> and restart the
-          backend to change them. YouTube/TikTok accounts themselves are connected below.
+          backend to change them. YouTube/TikTok/Instagram accounts themselves are connected below.
         </p>
       </div>
 
