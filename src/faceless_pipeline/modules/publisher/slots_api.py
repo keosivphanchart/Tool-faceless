@@ -47,15 +47,27 @@ class SlotCreate(BaseModel):
     _v_platforms = field_validator("platforms")(_validate_platforms)
 
 
+def _validate_days_if_set(value: list[int] | None) -> list[int] | None:
+    return _validate_days(value) if value is not None else value
+
+
+def _validate_time_if_set(value: str | None) -> str | None:
+    return _validate_time(value) if value is not None else value
+
+
 class SlotUpdate(BaseModel):
+    """Every field is optional so a PATCH can send just what's changing
+    (e.g. {"enabled": false}) - update_slot() below only applies the keys
+    actually present in the request body."""
+
     label: str | None = None
     days_of_week: list[int] | None = None
     time_of_day: str | None = None
     platforms: list[str] | None = None
     enabled: bool | None = None
 
-    _v_days = field_validator("days_of_week")(lambda v: _validate_days(v) if v is not None else v)
-    _v_time = field_validator("time_of_day")(lambda v: _validate_time(v) if v is not None else v)
+    _v_days = field_validator("days_of_week")(_validate_days_if_set)
+    _v_time = field_validator("time_of_day")(_validate_time_if_set)
     _v_platforms = field_validator("platforms")(_validate_platforms)
 
 

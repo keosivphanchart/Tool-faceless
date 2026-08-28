@@ -44,6 +44,76 @@ function BestTimesCard({ times }: { times: Record<string, BestPostingTime[]> }) 
   );
 }
 
+/** The label/time/days/platforms controls shared by the "add a slot" form
+ * and the inline "edit this slot" row - identical fields, just wired to
+ * whichever state (new-slot draft vs. an existing slot being edited) the
+ * caller owns. */
+function SlotFields({
+  label,
+  setLabel,
+  time,
+  setTime,
+  days,
+  setDays,
+  platforms,
+  setPlatforms,
+}: {
+  label: string;
+  setLabel: (v: string) => void;
+  time: string;
+  setTime: (v: string) => void;
+  days: number[];
+  setDays: (v: number[]) => void;
+  platforms: string[];
+  setPlatforms: (v: string[]) => void;
+}) {
+  function toggleDay(day: number) {
+    setDays(days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort());
+  }
+
+  function togglePlatform(platform: string) {
+    setPlatforms(platforms.includes(platform) ? platforms.filter((p) => p !== platform) : [...platforms, platform]);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <NeuInput placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} className="w-40" />
+        <NeuInput type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
+        <span className="text-xs text-neu-muted">UTC</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {DAY_LABELS.map((dayLabel, i) => (
+          <button
+            key={i}
+            onClick={() => toggleDay(i)}
+            className={`px-2.5 py-1 rounded-neu-sm text-xs shadow-neu-raised-xs transition-all ${
+              days.includes(i) ? "text-neu-accent shadow-neu-pressed-sm" : "text-neu-muted"
+            }`}
+          >
+            {dayLabel}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <span className="text-xs text-neu-muted mr-1">Platforms:</span>
+        {Object.entries(PLATFORM_LABELS).map(([key, platformLabel]) => (
+          <button
+            key={key}
+            onClick={() => togglePlatform(key)}
+            className={`px-2.5 py-1 rounded-neu-sm text-xs shadow-neu-raised-xs transition-all ${
+              platforms.includes(key) ? "text-neu-accent shadow-neu-pressed-sm" : "text-neu-muted"
+            }`}
+          >
+            {platformLabel}
+          </button>
+        ))}
+        <span className="text-xs text-neu-muted">(none selected = auto-detect, same as immediate publish)</span>
+      </div>
+    </div>
+  );
+}
+
 function NewSlotForm({ onCreated }: { onCreated: () => void }) {
   const { notify } = useToast();
   const [label, setLabel] = useState("");
@@ -51,14 +121,6 @@ function NewSlotForm({ onCreated }: { onCreated: () => void }) {
   const [days, setDays] = useState<number[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-
-  function toggleDay(day: number) {
-    setDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
-  }
-
-  function togglePlatform(platform: string) {
-    setPlatforms((prev) => (prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]));
-  }
 
   async function submit() {
     if (days.length === 0) {
@@ -82,39 +144,16 @@ function NewSlotForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div className="space-y-3 pt-4 border-t border-neu-shadowDark/60">
-      <div className="flex flex-wrap items-center gap-2">
-        <NeuInput placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} className="w-40" />
-        <NeuInput type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
-        <span className="text-xs text-neu-muted">UTC</span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {DAY_LABELS.map((label, i) => (
-          <button
-            key={i}
-            onClick={() => toggleDay(i)}
-            className={`px-2.5 py-1 rounded-neu-sm text-xs shadow-neu-raised-xs transition-all ${
-              days.includes(i) ? "text-neu-accent shadow-neu-pressed-sm" : "text-neu-muted"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <span className="text-xs text-neu-muted mr-1">Platforms:</span>
-        {Object.entries(PLATFORM_LABELS).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => togglePlatform(key)}
-            className={`px-2.5 py-1 rounded-neu-sm text-xs shadow-neu-raised-xs transition-all ${
-              platforms.includes(key) ? "text-neu-accent shadow-neu-pressed-sm" : "text-neu-muted"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-        <span className="text-xs text-neu-muted">(none selected = auto-detect, same as immediate publish)</span>
-      </div>
+      <SlotFields
+        label={label}
+        setLabel={setLabel}
+        time={time}
+        setTime={setTime}
+        days={days}
+        setDays={setDays}
+        platforms={platforms}
+        setPlatforms={setPlatforms}
+      />
       <NeuButton variant="primary" loading={saving} onClick={submit}>
         Add recurring slot
       </NeuButton>
@@ -122,9 +161,63 @@ function NewSlotForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function EditSlotRow({ slot, onSaved, onCancel }: { slot: PostingSlot; onSaved: () => void; onCancel: () => void }) {
+  const { notify } = useToast();
+  const [label, setLabel] = useState(slot.label);
+  const [time, setTime] = useState(slot.time_of_day);
+  const [days, setDays] = useState<number[]>(slot.days_of_week);
+  const [platforms, setPlatforms] = useState<string[]>(slot.platforms ?? []);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (days.length === 0) {
+      notify("error", "Pick at least one day");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.updateSlot(slot.id, { label, time_of_day: time, days_of_week: days, platforms: platforms.length ? platforms : null });
+      notify("success", "Slot updated");
+      onSaved();
+    } catch (err) {
+      notify("error", "Could not update slot", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td colSpan={7} className="py-3">
+        <div className="rounded-neu-sm shadow-neu-pressed-sm p-3 space-y-3">
+          <SlotFields
+            label={label}
+            setLabel={setLabel}
+            time={time}
+            setTime={setTime}
+            days={days}
+            setDays={setDays}
+            platforms={platforms}
+            setPlatforms={setPlatforms}
+          />
+          <div className="flex gap-2">
+            <NeuButton variant="primary" loading={saving} onClick={save}>
+              Save
+            </NeuButton>
+            <NeuButton variant="neutral" disabled={saving} onClick={onCancel}>
+              Cancel
+            </NeuButton>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function RecurringScheduleCard({ slots, reload }: { slots: PostingSlot[]; reload: () => void }) {
   const { notify } = useToast();
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   async function toggleEnabled(slot: PostingSlot) {
     setBusyId(slot.id);
@@ -150,6 +243,11 @@ function RecurringScheduleCard({ slots, reload }: { slots: PostingSlot[]; reload
     } finally {
       setBusyId(null);
     }
+  }
+
+  function saveEdit() {
+    setEditingId(null);
+    reload();
   }
 
   return (
@@ -187,29 +285,38 @@ function RecurringScheduleCard({ slots, reload }: { slots: PostingSlot[]; reload
               <th className="pb-2 font-medium">Days</th>
               <th className="pb-2 font-medium">Time</th>
               <th className="pb-2 font-medium">Platforms</th>
+              <th className="pb-2 font-medium">Last fired</th>
               <th className="pb-2 font-medium">Enabled</th>
               <th></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neu-shadowDark/60">
-            {slots.map((s) => (
-              <tr key={s.id}>
-                <td className="py-2">{s.label || "—"}</td>
-                <td className="py-2">{s.days_of_week.map((d) => DAY_LABELS[d]).join(", ")}</td>
-                <td className="py-2">{s.time_of_day} UTC</td>
-                <td className="py-2">{s.platforms ? s.platforms.map((p) => PLATFORM_LABELS[p] ?? p).join(", ") : "auto"}</td>
-                <td className="py-2">
-                  <button disabled={busyId === s.id} onClick={() => toggleEnabled(s)}>
-                    <NeuToggle on={s.enabled} label={s.enabled ? "on" : "off"} />
-                  </button>
-                </td>
-                <td className="py-2 text-right">
-                  <NeuButton variant="danger" loading={busyId === s.id} onClick={() => remove(s)}>
-                    Delete
-                  </NeuButton>
-                </td>
-              </tr>
-            ))}
+            {slots.map((s) =>
+              editingId === s.id ? (
+                <EditSlotRow key={s.id} slot={s} onSaved={saveEdit} onCancel={() => setEditingId(null)} />
+              ) : (
+                <tr key={s.id}>
+                  <td className="py-2">{s.label || "—"}</td>
+                  <td className="py-2">{s.days_of_week.map((d) => DAY_LABELS[d]).join(", ")}</td>
+                  <td className="py-2">{s.time_of_day} UTC</td>
+                  <td className="py-2">{s.platforms ? s.platforms.map((p) => PLATFORM_LABELS[p] ?? p).join(", ") : "auto"}</td>
+                  <td className="py-2 text-neu-muted">{s.last_fired_date ?? "never"}</td>
+                  <td className="py-2">
+                    <button disabled={busyId === s.id} onClick={() => toggleEnabled(s)}>
+                      <NeuToggle on={s.enabled} label={s.enabled ? "on" : "off"} />
+                    </button>
+                  </td>
+                  <td className="py-2 text-right space-x-2 whitespace-nowrap">
+                    <NeuButton disabled={busyId === s.id} onClick={() => setEditingId(s.id)}>
+                      Edit
+                    </NeuButton>
+                    <NeuButton variant="danger" loading={busyId === s.id} onClick={() => remove(s)}>
+                      Delete
+                    </NeuButton>
+                  </td>
+                </tr>
+              )
+            )}
           </tbody>
         </table>
       )}

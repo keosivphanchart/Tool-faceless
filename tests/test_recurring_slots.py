@@ -223,3 +223,106 @@ def test_create_slot_rejects_unknown_platform(db_session):
         assert resp.status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+def test_update_slot_can_change_time_days_and_platforms_together(db_session):
+    """The edit UI sends a full PATCH (every field, not just the one
+    that changed) - covers that update_slot() applies all of them, not
+    just the single-field patches (enabled toggle) exercised elsewhere."""
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        created = client.post(
+            "/api/publish/slots",
+            json={"label": "Old", "days_of_week": [0], "time_of_day": "09:00", "platforms": ["youtube"]},
+        ).json()
+
+        updated = client.patch(
+            f"/api/publish/slots/{created['id']}",
+            json={"label": "New", "days_of_week": [1, 3, 5], "time_of_day": "20:15", "platforms": ["tiktok"]},
+        )
+
+        assert updated.status_code == 200, updated.text
+        body = updated.json()
+        assert body["label"] == "New"
+        assert body["days_of_week"] == [1, 3, 5]
+        assert body["time_of_day"] == "20:15"
+        assert body["platforms"] == ["tiktok"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_update_slot_platforms_null_clears_to_auto_detect(db_session):
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        created = client.post(
+            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "09:00", "platforms": ["youtube"]}
+        ).json()
+
+        updated = client.patch(f"/api/publish/slots/{created['id']}", json={"platforms": None})
+
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["platforms"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_update_slot_rejects_invalid_time_format(db_session):
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        created = client.post(
+            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "09:00"}
+        ).json()
+
+        resp = client.patch(f"/api/publish/slots/{created['id']}", json={"time_of_day": "not-a-time"})
+
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_update_slot_rejects_empty_days(db_session):
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        created = client.post(
+            "/api/publish/slots", json={"days_of_week": [0], "time_of_day": "09:00"}
+        ).json()
+
+        resp = client.patch(f"/api/publish/slots/{created['id']}", json={"days_of_week": []})
+
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_update_missing_slot_returns_404(db_session):
+    from faceless_pipeline.db import get_db
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        resp = client.patch("/api/publish/slots/999999", json={"enabled": False})
+        assert resp.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
