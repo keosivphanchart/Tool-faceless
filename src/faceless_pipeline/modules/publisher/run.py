@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from faceless_pipeline.config import settings
 from faceless_pipeline.models import Video, VideoStatus
+from faceless_pipeline.modules.publisher.instagram import InstagramNotConfigured, InstagramPublishFailed
+from faceless_pipeline.modules.publisher.instagram import upload_video as instagram_upload
 from faceless_pipeline.modules.publisher.tiktok import TikTokNotConfigured, TikTokPublishFailed
 from faceless_pipeline.modules.publisher.tiktok import upload_video as tiktok_upload
 from faceless_pipeline.modules.publisher.youtube import YouTubeQuotaExceeded
@@ -27,16 +29,19 @@ def _load_metadata(video: Video) -> dict:
 
 def _default_platforms() -> list[str]:
     """Auto-publish to whatever's actually set up, instead of hardcoding
-    just YouTube — TikTok is a real upload path now, not a stub, so an
-    approved video should go to every platform this pipeline is
-    authorized for. YouTube is attempted unconditionally since its OAuth
-    flow prompts for setup on first use; TikTok is only attempted once
-    both its app credentials and a cached user token exist, so a video
-    isn't blocked on an interactive `authorize()` step nobody's run yet.
+    just YouTube — TikTok and Instagram are real upload paths now, not
+    stubs, so an approved video should go to every platform this
+    pipeline is authorized for. YouTube is attempted unconditionally
+    since its OAuth flow prompts for setup on first use; TikTok/Instagram
+    are only attempted once their app credentials and a cached user
+    token both exist, so a video isn't blocked on an interactive
+    connect step nobody's run yet.
     """
     platforms = ["youtube"]
     if settings.tiktok_client_key and settings.tiktok_client_secret and Path(settings.tiktok_token_file).exists():
         platforms.append("tiktok")
+    if settings.instagram_app_id and settings.instagram_app_secret and Path(settings.instagram_token_file).exists():
+        platforms.append("instagram")
     return platforms
 
 
@@ -74,18 +79,26 @@ def publish_video(db: Session, video_id: int, platforms: list[str] | None = None
                     video.file_path, title=metadata.get("title", video.script.topic), tags=metadata.get("tags", [])
                 )
                 platform_ids["tiktok"] = video_ref
+            elif platform == "instagram":
+                video_ref = instagram_upload(
+                    video.file_path, title=metadata.get("title", video.script.topic), tags=metadata.get("tags", [])
+                )
+                platform_ids["instagram"] = video_ref
             else:
                 logger.warning("Unknown platform '%s', skipping", platform)
         except YouTubeQuotaExceeded:
             logger.exception("YouTube quota exceeded; leave video approved and retry later")
         except TikTokNotConfigured:
             logger.warning("TikTok not configured yet; skipping TikTok publish")
+        except InstagramNotConfigured:
+            logger.warning("Instagram not configured yet; skipping Instagram publish")
         except Exception:
             logger.exception("Publish to %s failed", platform)
 
     video.platform_ids = platform_ids
     if platform_ids:
         video.status = VideoStatus.published
+        video.published_at = datetime.utcnow()
     db.commit()
     db.refresh(video)
     return video

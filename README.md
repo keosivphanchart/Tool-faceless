@@ -247,24 +247,35 @@ so a missing/broken source never blocks the others.
       polls every 8s and surfaces as a dismissible error toast the
       moment it happens.
 
-### Module 6 — Publisher — `built` (YouTube + TikTok)
-- [x] YouTube Data API `videos.insert` + OAuth (installed-app flow, token cached)
+### Module 6 — Publisher — `built` (YouTube + TikTok + Instagram)
+- [x] YouTube Data API `videos.insert` + OAuth (web flow, token cached)
 - [x] Quota-exceeded handling (`YouTubeQuotaExceeded`)
-- [x] TikTok Content Posting API v2 direct-post flow: interactive OAuth
-      (`python -m faceless_pipeline.modules.publisher.tiktok` once, to
-      authorize and cache a token), then init → upload → poll-status per
-      publish. **Apply for TikTok API access early** — posting to any
-      account beyond your own takes weeks of app review; your own
-      developer/test account can authorize and post immediately after
-      creating a sandbox app, which is what this is built and tested
-      against. Defaults to `SELF_ONLY` privacy (visible only to the
-      posting account) so an automated run can't accidentally post
-      publicly.
+- [x] TikTok Content Posting API v2 direct-post flow: OAuth, then init →
+      upload → poll-status per publish. **Apply for TikTok API access
+      early** — posting to any account beyond your own takes weeks of app
+      review; your own developer/test account can authorize and post
+      immediately after creating a sandbox app, which is what this is
+      built and tested against. Defaults to `SELF_ONLY` privacy (visible
+      only to the posting account) so an automated run can't accidentally
+      post publicly.
+- [x] Instagram Reels via the Meta Graph API's Content Publishing
+      endpoints: OAuth through Facebook (finds the Instagram Business
+      Account behind whichever Page you authorize), then create → poll →
+      publish per Reel. Unlike YouTube/TikTok, Instagram fetches the video
+      from a URL instead of taking a direct upload, so it also needs
+      `PUBLIC_BASE_URL` set to this backend's own public HTTPS origin —
+      Meta's servers can't fetch from `localhost`.
+- [x] All three accounts are connected from the dashboard's **Settings**
+      page ("Connect YouTube" / "Connect TikTok" / "Connect Instagram")
+      once the app credentials (`YOUTUBE_CLIENT_SECRETS_FILE`,
+      `TIKTOK_CLIENT_KEY`/`_SECRET`, `INSTAGRAM_APP_ID`/`_SECRET`) are set
+      in `.env` — no CLI step needed. Click Connect, approve in the
+      platform's consent screen, get redirected back with the account
+      authorized. Disconnect from the same page.
 - [x] `publish_video()` auto-publishes to every platform that's actually
-      configured (YouTube always attempted; TikTok once both its app
-      credentials and a cached token exist) instead of hardcoding just
-      YouTube
-- [ ] Instagram Reels (stretch goal, not started)
+      configured (YouTube always attempted; TikTok/Instagram once each
+      one's app credentials and a cached token exist) instead of
+      hardcoding just YouTube
 - [x] Scheduling — pick a future publish time from the Review queue
       (or approve immediately, the default) instead of always publishing
       right away. A background dispatcher (`publisher/scheduler.py`,
@@ -359,7 +370,7 @@ API surfaces rather than crashing.
 3. Voice generation — done (needs Kokoro installed locally)
 4. Video assembly — done (needs ffmpeg + footage API keys)
 5. Review checkpoint — done
-6. Publisher — YouTube done, TikTok pending API approval
+6. Publisher — YouTube done, TikTok/Instagram built but pending each platform's own app review
 7. Full dashboard — skeleton done, expand as the pipeline runs for real
 8. Analytics feedback loop — YouTube done, TikTok pending, prompt feedback loop not wired
 
@@ -372,3 +383,8 @@ API surfaces rather than crashing.
 - Credentials only ever live in `.env` / environment variables — the
   dashboard's Settings page reports which keys are configured without ever
   transmitting the values
+- The dashboard itself has no auth by default (fine for local dev) - set
+  `DASHBOARD_PASSWORD` before deploying anywhere reachable beyond
+  localhost. It gates every `/api/*` route behind a login screen + session
+  cookie; `/media` is deliberately left open since it's also fetched
+  server-side by Meta when publishing an Instagram Reel

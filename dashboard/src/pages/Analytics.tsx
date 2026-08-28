@@ -1,20 +1,139 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
-import { NeuCard, NeuProgress } from "../components/Neu";
+import { useEffect, useMemo, useState } from "react";
+import { api, PerformanceRow, SpendSummary } from "../api";
+import { NeuCard, NeuProgress, NeuSelect } from "../components/Neu";
+import { TrendChart, TrendSeries } from "../components/TrendChart";
+
+// Fixed categorical order (blue/orange/aqua) - never reassigned per
+// filter, so a platform keeps its color whichever video is selected.
+const PLATFORM_COLORS: Record<string, string> = { youtube: "#2a78d6", tiktok: "#eb6834", instagram: "#1baf7a" };
+const PLATFORM_LABEL: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" };
+
+function VideoTrendCard({ performance }: { performance: PerformanceRow[] }) {
+  const videoOptions = useMemo(() => {
+    const seen = new Map<number, string>();
+    performance.forEach((p) => {
+      if (!seen.has(p.video_id)) seen.set(p.video_id, p.topic);
+    });
+    return Array.from(seen.entries()).map(([id, topic]) => ({ id, topic }));
+  }, [performance]);
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (selectedId === null && videoOptions.length > 0) setSelectedId(videoOptions[0].id);
+  }, [videoOptions, selectedId]);
+
+  const series: TrendSeries[] = useMemo(() => {
+    if (selectedId === null) return [];
+    const byPlatform = new Map<string, PerformanceRow[]>();
+    performance
+      .filter((p) => p.video_id === selectedId)
+      .forEach((p) => {
+        if (!byPlatform.has(p.platform)) byPlatform.set(p.platform, []);
+        byPlatform.get(p.platform)!.push(p);
+      });
+    return Array.from(byPlatform.entries()).map(([platform, rows]) => ({
+      key: platform,
+      label: PLATFORM_LABEL[platform] ?? platform,
+      color: PLATFORM_COLORS[platform] ?? "#888",
+      points: rows.map((r) => ({ x: r.pulled_at, y: r.views })),
+    }));
+  }, [performance, selectedId]);
+
+  return (
+    <NeuCard>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-neu-muted">Views over time</h3>
+        {videoOptions.length > 0 && (
+          <NeuSelect
+            className="text-xs"
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(Number(e.target.value))}
+          >
+            {videoOptions.map((v) => (
+              <option key={v.id} value={v.id}>
+                #{v.id} {v.topic}
+              </option>
+            ))}
+          </NeuSelect>
+        )}
+      </div>
+      <TrendChart series={series} emptyLabel="No performance data yet." />
+    </NeuCard>
+  );
+}
+
+function SpendCard({ spend }: { spend: SpendSummary | null }) {
+  if (!spend) return null;
+
+  const dailyPct = spend.daily_budget_usd > 0 ? (spend.daily_spend_usd / spend.daily_budget_usd) * 100 : 0;
+  const monthlyPct = spend.monthly_budget_usd > 0 ? (spend.monthly_spend_usd / spend.monthly_budget_usd) * 100 : 0;
+  const trendSeries: TrendSeries[] =
+    spend.by_day.length > 0
+      ? [{ key: "spend", label: "Spend", color: "#2a78d6", points: spend.by_day.map((d) => ({ x: d.date, y: d.cost_usd })) }]
+      : [];
+
+  return (
+    <NeuCard>
+      <h3 className="text-sm font-medium text-neu-muted mb-3">LLM spend</h3>
+      <p className="text-xs text-neu-muted mb-4">
+        Estimated from token counts, tracked in-memory since the last restart — not a precise bill.{" "}
+        {spend.total_calls} generation{spend.total_calls === 1 ? "" : "s"} counted.
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <p className="text-xs text-neu-muted mb-1">
+            Today: ${spend.daily_spend_usd.toFixed(4)}
+            {spend.daily_budget_usd > 0 && ` / $${spend.daily_budget_usd.toFixed(2)}`}
+          </p>
+          {spend.daily_budget_usd > 0 ? <NeuProgress value={Math.min(dailyPct, 100)} /> : <p className="text-xs text-neu-muted">unlimited</p>}
+        </div>
+        <div>
+          <p className="text-xs text-neu-muted mb-1">
+            This month: ${spend.monthly_spend_usd.toFixed(4)}
+            {spend.monthly_budget_usd > 0 && ` / $${spend.monthly_budget_usd.toFixed(2)}`}
+          </p>
+          {spend.monthly_budget_usd > 0 ? (
+            <NeuProgress value={Math.min(monthlyPct, 100)} />
+          ) : (
+            <p className="text-xs text-neu-muted">unlimited</p>
+          )}
+        </div>
+      </div>
+
+      <TrendChart series={trendSeries} emptyLabel="No LLM calls recorded yet." />
+
+      {spend.by_provider.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {spend.by_provider.map((p) => (
+            <span key={p.provider} className="text-xs text-neu-muted rounded-full px-3 py-1 shadow-neu-raised-xs">
+              {p.provider}: ${p.cost_usd.toFixed(4)}
+            </span>
+          ))}
+        </div>
+      )}
+    </NeuCard>
+  );
+}
 
 export default function Analytics() {
   const [best, setBest] = useState<{ by_style: any[]; by_topic: any[] }>({ by_style: [], by_topic: [] });
-  const [performance, setPerformance] = useState<any[]>([]);
+  const [performance, setPerformance] = useState<PerformanceRow[]>([]);
+  const [spend, setSpend] = useState<SpendSummary | null>(null);
 
   useEffect(() => {
     api.bestPerformers().then(setBest);
     api.performance().then(setPerformance);
+    api.spendSummary().then(setSpend);
   }, []);
 
   return (
     <div className="space-y-8">
       <h2 className="text-xl font-semibold">Analytics</h2>
       <p className="text-xs text-neu-muted">Refreshed weekly by Module 8's analytics pull job.</p>
+
+      <VideoTrendCard performance={performance} />
 
       <div className="grid grid-cols-2 gap-6">
         <NeuCard>
@@ -55,6 +174,8 @@ export default function Analytics() {
           </table>
         </NeuCard>
       </div>
+
+      <SpendCard spend={spend} />
 
       <NeuCard>
         <h3 className="text-sm font-medium text-neu-muted mb-3">Raw performance pulls</h3>

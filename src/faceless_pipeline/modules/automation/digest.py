@@ -54,10 +54,35 @@ def send_digest() -> None:
     send_notification(message)
 
 
+CHECK_INTERVAL_SECONDS = 60
+
+
+def digest_due(last_sent: datetime, now: datetime) -> bool:
+    """Reads settings.digest_enabled/digest_interval_hours fresh on every
+    call (not captured once at loop start), which is what makes both
+    settable live from the dashboard without a restart."""
+    if not settings.digest_enabled:
+        return False
+    interval = timedelta(hours=max(settings.digest_interval_hours, 1))
+    return now - last_sent >= interval
+
+
 async def run_digest_loop() -> None:
-    interval_seconds = max(settings.digest_interval_hours, 1) * 3600
+    """Always runs (like publisher/scheduler.py's dispatcher) so flipping
+    DIGEST_ENABLED from the dashboard takes effect without a restart,
+    instead of only being checked once at process startup to decide
+    whether to spawn this loop at all. Polls every minute rather than
+    sleeping a full DIGEST_INTERVAL_HOURS so a changed interval is also
+    picked up live. last_sent starts at "now" (not unset) to preserve
+    the original sleep-first behavior: a restart doesn't itself trigger
+    a fresh digest, even with DIGEST_ENABLED already on.
+    """
+    last_sent = datetime.utcnow()
     while True:
-        await asyncio.sleep(interval_seconds)  # sleep-first: see scheduler.py's note on restart behavior
+        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+        if not digest_due(last_sent, datetime.utcnow()):
+            continue
+        last_sent = datetime.utcnow()
         try:
             await asyncio.to_thread(send_digest)
         except Exception:

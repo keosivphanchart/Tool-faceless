@@ -99,6 +99,29 @@ def list_scheduled(db: Session = Depends(get_db)):
     return [_serialize(v) for v in videos]
 
 
+# How overdue a scheduled publish has to be before it's surfaced as
+# "needs attention" rather than just "hasn't come up yet" - well past
+# the scheduler's own 60s poll interval, so this only flags genuine
+# repeated-failure cases (see publisher/scheduler.py's
+# dispatch_due_scheduled_publishes: a video that fails to publish stays
+# approved with scheduled_for unchanged in the past, so the next tick
+# retries it - and keeps retrying, silently, forever, until this).
+NEEDS_ATTENTION_OVERDUE_MINUTES = 15
+
+
+@router.get("/needs-attention")
+def list_needs_attention(db: Session = Depends(get_db)):
+    cutoff = datetime.utcnow() - timedelta(minutes=NEEDS_ATTENTION_OVERDUE_MINUTES)
+    videos = (
+        db.query(Video)
+        .options(joinedload(Video.script))
+        .filter(Video.status == VideoStatus.approved, Video.scheduled_for.isnot(None), Video.scheduled_for < cutoff)
+        .order_by(Video.scheduled_for.asc())
+        .all()
+    )
+    return [_serialize(v) for v in videos]
+
+
 @router.post("/{video_id}/unschedule")
 def unschedule_video(video_id: int, db: Session = Depends(get_db)):
     """Cancels a pending schedule without touching review status — the

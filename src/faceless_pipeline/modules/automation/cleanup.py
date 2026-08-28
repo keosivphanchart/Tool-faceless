@@ -68,11 +68,28 @@ def cleanup_stale_data(db: Session, retention_days: int | None = None) -> dict:
     return {"videos_deleted": len(stale_videos), "scripts_deleted": len(stale_scripts)}
 
 
+CHECK_INTERVAL_SECONDS = 60
+
+
+def cleanup_due(last_run: datetime, now: datetime) -> bool:
+    """Reads settings.cleanup_enabled/cleanup_interval_hours fresh on
+    every call (not captured once at loop start), which is what makes
+    both settable live from the dashboard without a restart."""
+    if not settings.cleanup_enabled:
+        return False
+    interval = timedelta(hours=max(settings.cleanup_interval_hours, 1))
+    return now - last_run >= interval
+
+
 async def run_cleanup_loop() -> None:
+    """Always runs (like publisher/scheduler.py's dispatcher) so flipping
+    CLEANUP_ENABLED from the dashboard takes effect without a restart.
+    Polls every minute rather than sleeping a full CLEANUP_INTERVAL_HOURS
+    so a changed interval is also picked up live. last_run starts at
+    "now" so a restart doesn't itself trigger an immediate cleanup pass,
+    even with CLEANUP_ENABLED already on."""
     from faceless_pipeline.api.pipeline import record_run
     from faceless_pipeline.db import SessionLocal
-
-    interval_seconds = max(settings.cleanup_interval_hours, 1) * 3600
 
     def _tick():
         db = SessionLocal()
@@ -87,8 +104,12 @@ async def run_cleanup_loop() -> None:
         finally:
             db.close()
 
+    last_run = datetime.utcnow()
     while True:
-        await asyncio.sleep(interval_seconds)
+        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+        if not cleanup_due(last_run, datetime.utcnow()):
+            continue
+        last_run = datetime.utcnow()
         try:
             await asyncio.to_thread(_tick)
         except Exception:

@@ -124,6 +124,60 @@ def best_performing_patterns(db: Session, top_n: int = 5) -> dict:
     return {"by_style": by_style, "by_topic": by_topic}
 
 
+def best_posting_times(db: Session, top_n: int = 5) -> dict:
+    """Suggests, per platform, which hour of day (UTC) has historically
+    drawn the most average views - so a recurring posting slot can be set
+    at an informed time instead of a guess. Same latest-per-(video,
+    platform) dedup as best_performing_patterns(), keyed off
+    Video.published_at (the actual publish timestamp, not scheduled_for
+    which is only set for videos that were scheduled ahead of time)."""
+    import pandas as pd
+    from sqlalchemy import func
+
+    latest_per_video_platform = (
+        db.query(
+            Performance.video_id,
+            Performance.platform,
+            func.max(Performance.pulled_at).label("max_pulled_at"),
+        )
+        .group_by(Performance.video_id, Performance.platform)
+        .subquery()
+    )
+
+    rows = (
+        db.query(Performance, Video)
+        .join(Video, Performance.video_id == Video.id)
+        .join(
+            latest_per_video_platform,
+            (Performance.video_id == latest_per_video_platform.c.video_id)
+            & (Performance.platform == latest_per_video_platform.c.platform)
+            & (Performance.pulled_at == latest_per_video_platform.c.max_pulled_at),
+        )
+        .filter(Video.published_at.isnot(None))
+        .all()
+    )
+    if not rows:
+        return {}
+
+    records = [{"platform": perf.platform, "hour": video.published_at.hour, "views": perf.views} for perf, video in rows]
+    df = pd.DataFrame(records)
+
+    result = {}
+    for platform, group in df.groupby("platform"):
+        agg = (
+            group.groupby("hour")["views"]
+            .agg(avg_views="mean", sample_count="count")
+            .sort_values("avg_views", ascending=False)
+            .head(top_n)
+            .reset_index()
+        )
+        result[platform] = [
+            {"hour": int(r["hour"]), "avg_views": round(float(r["avg_views"]), 1), "sample_count": int(r["sample_count"])}
+            for r in agg.to_dict(orient="records")
+        ]
+    return result
+
+
 if __name__ == "__main__":
     init_db()
     session = SessionLocal()

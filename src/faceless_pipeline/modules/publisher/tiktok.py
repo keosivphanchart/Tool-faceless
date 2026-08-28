@@ -130,6 +130,30 @@ def _get_access_token() -> str:
     return refreshed["access_token"]
 
 
+def is_connected() -> bool:
+    return _token_path().is_file()
+
+
+def disconnect() -> None:
+    _token_path().unlink(missing_ok=True)
+
+
+def build_authorize_url() -> str:
+    """Starts the dashboard-driven connect flow: the URL to send the
+    browser to for TikTok's consent screen."""
+    _require_client_credentials()
+    return (
+        f"{AUTHORIZE_URL}?client_key={settings.tiktok_client_key}&scope={SCOPES}"
+        f"&response_type=code&redirect_uri={settings.tiktok_redirect_uri}&state=faceless_pipeline"
+    )
+
+
+def complete_authorization(code: str) -> None:
+    """Finishes the connect flow: exchanges the code TikTok's redirect
+    handed back for a token and caches it at TIKTOK_TOKEN_FILE."""
+    _save_token(_exchange_code_for_token(code))
+
+
 def authorize() -> None:
     """One-time interactive setup: opens a browser for TikTok's OAuth
     consent screen, runs a short-lived local HTTP server to catch the

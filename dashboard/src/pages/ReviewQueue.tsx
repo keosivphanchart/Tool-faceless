@@ -5,12 +5,201 @@ import { useToast } from "../components/Toasts";
 
 type Action = "approve" | "schedule" | "reject" | "regenerate-script" | "regenerate-video";
 
+function BulkActionBar({
+  videos,
+  selected,
+  setSelected,
+  onDone,
+}: {
+  videos: ReviewVideo[];
+  selected: Set<number>;
+  setSelected: (s: Set<number>) => void;
+  onDone: () => void;
+}) {
+  const { notify } = useToast();
+  const [busy, setBusy] = useState<"approve" | "schedule" | "reject" | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [intervalHours, setIntervalHours] = useState("24");
+
+  const ids = Array.from(selected);
+  const allSelected = videos.length > 0 && selected.size === videos.length;
+
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(videos.map((v) => v.id)));
+  }
+
+  function summarize(label: string, results: PromiseSettledResult<unknown>[]) {
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const ok = results.length - failed;
+    if (failed === 0) {
+      notify("success", `${label}: ${ok} video${ok === 1 ? "" : "s"}`);
+    } else {
+      notify("error", `${label}: ${ok} succeeded, ${failed} failed`, "Check individual videos for details.");
+    }
+  }
+
+  async function bulkApprove() {
+    setBusy("approve");
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.approveVideo(id)));
+      summarize("Approved", results);
+      setSelected(new Set());
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function bulkReject() {
+    if (!window.confirm(`Reject ${ids.length} selected video${ids.length === 1 ? "" : "s"}?`)) return;
+    setBusy("reject");
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.rejectVideo(id, rejectNote)));
+      summarize("Rejected", results);
+      setSelected(new Set());
+      setRejectNote("");
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function bulkSchedule() {
+    if (!scheduleAt) {
+      notify("error", "Pick a start date/time first");
+      return;
+    }
+    setBusy("schedule");
+    try {
+      const iso = new Date(scheduleAt).toISOString();
+      const { scheduled } = await api.batchSchedule(ids, iso, parseFloat(intervalHours) || 24);
+      notify(
+        "success",
+        `Scheduled ${scheduled.length} video${scheduled.length === 1 ? "" : "s"}`,
+        `Starting ${new Date(scheduleAt).toLocaleString()}, ${intervalHours}h apart — see Scheduled.`
+      );
+      setSelected(new Set());
+      onDone();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <NeuCard className="flex flex-wrap items-center gap-3">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+        {selected.size > 0 ? `${selected.size} selected` : "Select all"}
+      </label>
+
+      {selected.size > 0 && (
+        <>
+          <NeuButton variant="success" disabled={!!busy} loading={busy === "approve"} onClick={bulkApprove}>
+            Approve {selected.size} now
+          </NeuButton>
+
+          <div className="flex items-center gap-1.5">
+            <NeuInput
+              type="datetime-local"
+              className="text-xs"
+              value={scheduleAt}
+              onChange={(e) => setScheduleAt(e.target.value)}
+              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+            />
+            <NeuInput
+              type="number"
+              min="0.5"
+              step="0.5"
+              className="w-16 text-xs"
+              value={intervalHours}
+              onChange={(e) => setIntervalHours(e.target.value)}
+              title="Hours between each video's publish time"
+            />
+            <span className="text-xs text-neu-muted">hrs apart</span>
+            <NeuButton disabled={!!busy} loading={busy === "schedule"} onClick={bulkSchedule}>
+              Schedule {selected.size}
+            </NeuButton>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <NeuInput
+              placeholder="Reject note (optional)"
+              className="text-xs w-40"
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+            />
+            <NeuButton variant="danger" disabled={!!busy} loading={busy === "reject"} onClick={bulkReject}>
+              Reject {selected.size}
+            </NeuButton>
+          </div>
+        </>
+      )}
+    </NeuCard>
+  );
+}
+
+function EditScriptForm({
+  video,
+  onSaved,
+  onCancel,
+}: {
+  video: ReviewVideo;
+  onSaved: (v: ReviewVideo) => void;
+  onCancel: () => void;
+}) {
+  const { notify } = useToast();
+  const [hook, setHook] = useState(video.script.text.hook);
+  const [promise, setPromise] = useState(video.script.text.promise);
+  const [body, setBody] = useState(video.script.text.body);
+  const [payoff, setPayoff] = useState(video.script.text.payoff);
+  const [cta, setCta] = useState(video.script.text.cta);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updated = await api.editScript(video.id, { hook, promise, body, payoff, cta });
+      notify(
+        "success",
+        "Script text updated",
+        'This only changes the text — click "Regenerate video" below to re-render with it.'
+      );
+      onSaved(updated);
+    } catch (err) {
+      notify("error", "Could not save", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 space-y-2 text-sm">
+      <NeuTextarea className="w-full" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="Hook" rows={2} />
+      <NeuTextarea className="w-full" value={promise} onChange={(e) => setPromise(e.target.value)} placeholder="Promise" rows={2} />
+      <NeuTextarea className="w-full" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Body" rows={3} />
+      <NeuTextarea className="w-full" value={payoff} onChange={(e) => setPayoff(e.target.value)} placeholder="Payoff" rows={2} />
+      <NeuTextarea className="w-full" value={cta} onChange={(e) => setCta(e.target.value)} placeholder="CTA" rows={2} />
+      <div className="flex gap-2">
+        <NeuButton variant="primary" loading={saving} onClick={save}>
+          Save
+        </NeuButton>
+        <NeuButton disabled={saving} onClick={onCancel}>
+          Cancel
+        </NeuButton>
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
   const [scheduleAt, setScheduleAt] = useState<Record<number, string>>({});
   const [regenerating, setRegenerating] = useState<Set<number>>(new Set());
   const [actionBusy, setActionBusy] = useState<Record<number, Action | undefined>>({});
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [editingScriptId, setEditingScriptId] = useState<number | null>(null);
   const { notify } = useToast();
 
   const load = () => api.listPendingVideos().then(setVideos);
@@ -122,6 +311,15 @@ export default function ReviewQueue() {
     }
   }
 
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Review queue ({videos.length} pending)</h2>
@@ -132,11 +330,16 @@ export default function ReviewQueue() {
         </p>
       )}
 
+      {videos.length > 0 && <BulkActionBar videos={videos} selected={selected} setSelected={setSelected} onDone={load} />}
+
       {videos.map((v) => {
         const busy = actionBusy[v.id];
         return (
           <NeuCard key={v.id} className="space-y-4">
             <div className="flex gap-4">
+              <label className="flex items-start pt-1">
+                <input type="checkbox" checked={selected.has(v.id)} onChange={() => toggleSelected(v.id)} />
+              </label>
               {v.file_path ? (
                 <video
                   controls
@@ -154,21 +357,40 @@ export default function ReviewQueue() {
                 </div>
               )}
 
-              <div className="flex-1 space-y-1 text-sm">
-                <p className="font-medium">{v.script.topic}</p>
-                <p>
-                  <span className="text-neu-muted">Hook: </span>
-                  {v.script.text.hook}
-                </p>
-                <p>
-                  <span className="text-neu-muted">Body: </span>
-                  {v.script.text.body}
-                </p>
-                <p>
-                  <span className="text-neu-muted">CTA: </span>
-                  {v.script.text.cta}
-                </p>
-              </div>
+              {editingScriptId === v.id ? (
+                <EditScriptForm
+                  video={v}
+                  onSaved={(updated) => {
+                    setVideos((prev) => prev.map((x) => (x.id === v.id ? updated : x)));
+                    setEditingScriptId(null);
+                  }}
+                  onCancel={() => setEditingScriptId(null)}
+                />
+              ) : (
+                <div className="flex-1 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">{v.script.topic}</p>
+                    <button
+                      className="text-xs text-neu-accent hover:underline"
+                      onClick={() => setEditingScriptId(v.id)}
+                    >
+                      Edit script
+                    </button>
+                  </div>
+                  <p>
+                    <span className="text-neu-muted">Hook: </span>
+                    {v.script.text.hook}
+                  </p>
+                  <p>
+                    <span className="text-neu-muted">Body: </span>
+                    {v.script.text.body}
+                  </p>
+                  <p>
+                    <span className="text-neu-muted">CTA: </span>
+                    {v.script.text.cta}
+                  </p>
+                </div>
+              )}
             </div>
 
             {v.script.text.storyboard && <StoryboardStrip shots={v.script.text.storyboard} />}

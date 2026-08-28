@@ -1,16 +1,22 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from faceless_pipeline.db import get_db
-from faceless_pipeline.models import Performance
-from faceless_pipeline.modules.analytics.run import best_performing_patterns, pull_all_performance
+from faceless_pipeline.models import Performance, Video
+from faceless_pipeline.modules.analytics.run import best_performing_patterns, best_posting_times, pull_all_performance
 
 router = APIRouter()
 
 
 @router.get("/performance")
 def list_performance(video_id: int | None = None, db: Session = Depends(get_db)):
-    query = db.query(Performance).order_by(Performance.pulled_at.desc())
+    # joinedload avoids an N+1: without it, the .video.script.topic
+    # access below fires two extra SELECTs per row.
+    query = (
+        db.query(Performance)
+        .options(joinedload(Performance.video).joinedload(Video.script))
+        .order_by(Performance.pulled_at.desc())
+    )
     if video_id is not None:
         query = query.filter(Performance.video_id == video_id)
     rows = query.limit(200).all()
@@ -18,6 +24,7 @@ def list_performance(video_id: int | None = None, db: Session = Depends(get_db))
         {
             "id": p.id,
             "video_id": p.video_id,
+            "topic": p.video.script.topic,
             "platform": p.platform,
             "views": p.views,
             "retention_pct": p.retention_pct,
@@ -33,6 +40,11 @@ def list_performance(video_id: int | None = None, db: Session = Depends(get_db))
 @router.get("/best-performers")
 def best_performers(db: Session = Depends(get_db)):
     return best_performing_patterns(db)
+
+
+@router.get("/best-times")
+def best_times(db: Session = Depends(get_db)):
+    return best_posting_times(db)
 
 
 @router.post("/pull")

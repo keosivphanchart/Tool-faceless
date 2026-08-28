@@ -62,10 +62,29 @@ class Video(Base):
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     platform_ids: Mapped[dict] = mapped_column(JSON, default=dict)  # {"youtube": "...", "tiktok": "..."}
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     script: Mapped["Script"] = relationship(back_populates="videos")
     performance: Mapped[list["Performance"]] = relationship(back_populates="video")
+
+
+class PostingSlot(Base):
+    """A repeating posting time (e.g. "Mon/Wed/Fri 18:00 UTC") that the
+    recurring scheduler fires on its own, publishing whatever approved
+    video has been waiting longest - the alternative to picking one
+    datetime by hand per video via Video.scheduled_for."""
+
+    __tablename__ = "posting_slots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), default="")
+    days_of_week: Mapped[list[int]] = mapped_column(JSON)  # 0=Monday .. 6=Sunday
+    time_of_day: Mapped[str] = mapped_column(String(5))  # "HH:MM", UTC, 24h
+    platforms: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)  # None = auto-detect, like immediate publish
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_fired_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "YYYY-MM-DD", UTC
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Performance(Base):
