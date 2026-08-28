@@ -383,3 +383,8 @@ API surfaces rather than crashing.
 - Credentials only ever live in `.env` / environment variables — the
   dashboard's Settings page reports which keys are configured without ever
   transmitting the values
+- The dashboard itself has no auth by default (fine for local dev) - set
+  `DASHBOARD_PASSWORD` before deploying anywhere reachable beyond
+  localhost. It gates every `/api/*` route behind a login screen + session
+  cookie; `/media` is deliberately left open since it's also fetched
+  server-side by Meta when publishing an Instagram Reel

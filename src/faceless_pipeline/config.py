@@ -8,6 +8,17 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./faceless_pipeline.db"
     env: str = "development"
 
+    # Dashboard auth - a single admin password gating the whole API
+    # behind a login screen + session cookie. Empty (the default) means
+    # auth is OFF: every endpoint is open, same as before this existed -
+    # fine for local dev, never for anything reachable beyond localhost.
+    # Set both before deploying anywhere real.
+    dashboard_password: str = ""
+    # Signs the session cookie. Empty means a random key is generated at
+    # process startup instead (sessions just don't survive a restart,
+    # which is fine for a single-password admin session).
+    dashboard_session_secret: str = ""
+
     # Module 1: Trend finder
     trend_seed_keywords: str = "ai tools,personal finance,productivity hacks"
     youtube_api_key: str = ""

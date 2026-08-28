@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import {
   Activity,
@@ -6,11 +7,14 @@ import {
   FileText,
   Flame,
   LineChart,
+  LogOut,
   PawPrint,
   Send,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { api } from "./api";
 import Analytics from "./pages/Analytics";
+import Login from "./pages/Login";
 import PipelineStatus from "./pages/PipelineStatus";
 import PublishHistory from "./pages/PublishHistory";
 import ReviewQueue from "./pages/ReviewQueue";
@@ -18,7 +22,7 @@ import Scheduled from "./pages/Scheduled";
 import Scripts from "./pages/Scripts";
 import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
-import { NeuCard, NeuIcon } from "./components/Neu";
+import { NeuButton, NeuCard, NeuIcon } from "./components/Neu";
 import { ToastProvider } from "./components/Toasts";
 import { ThemeToggle } from "./components/ThemeToggle";
 
@@ -34,6 +38,25 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
+  // null = still checking; DASHBOARD_PASSWORD unset means the backend
+  // always reports authenticated: true, so this gate is invisible
+  // (no login screen, no logout button) unless auth is actually turned on.
+  const [auth, setAuth] = useState<{ enabled: boolean; authenticated: boolean } | null>(null);
+
+  useEffect(() => {
+    api.authStatus().then(setAuth);
+  }, []);
+
+  async function logout() {
+    await api.logout();
+    setAuth((prev) => (prev ? { ...prev, authenticated: false } : prev));
+  }
+
+  if (auth === null) return null;
+  if (!auth.authenticated) {
+    return <Login onSuccess={() => setAuth({ enabled: true, authenticated: true })} />;
+  }
+
   return (
     <ToastProvider>
       <div className="min-h-screen flex gap-6 p-6">
@@ -71,8 +94,14 @@ export default function App() {
                 </NavLink>
               );
             })}
-            <div className="pt-3">
+            <div className="pt-3 space-y-1">
               <ThemeToggle />
+              {auth.enabled && (
+                <NeuButton className="w-full justify-center text-xs" onClick={logout}>
+                  <LogOut size={14} aria-hidden="true" />
+                  Log out
+                </NeuButton>
+              )}
             </div>
           </NeuCard>
         </nav>

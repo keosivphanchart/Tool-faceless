@@ -8,10 +8,12 @@ from faceless_pipeline.modules.publisher.slots_api import router as slots_router
 from faceless_pipeline.modules.review.api import router as review_router
 from faceless_pipeline.modules.scripts.api import router as scripts_router
 from faceless_pipeline.modules.trends.api import router as trends_router
+from faceless_pipeline.api.auth import router as auth_router
 from faceless_pipeline.api.pipeline import router as pipeline_router
 from faceless_pipeline.api.settings_status import router as settings_router
 
 api_router = APIRouter(prefix="/api")
+api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(pipeline_router, prefix="/pipeline", tags=["pipeline"])
 api_router.include_router(settings_router, prefix="/settings", tags=["settings"])
 api_router.include_router(trends_router, prefix="/trends", tags=["trends"])

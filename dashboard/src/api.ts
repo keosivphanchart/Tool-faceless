@@ -3,8 +3,16 @@ const BASE = "/api";
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     ...options,
   });
+  if (res.status === 401 && path !== "/auth/status" && path !== "/auth/login") {
+    // The session expired (cookie aged out, or the backend restarted and
+    // lost its in-memory fallback secret) mid-visit - force a full reload
+    // so App re-checks /auth/status and lands back on the login screen,
+    // instead of every page's data silently failing to load.
+    window.location.href = "/";
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${body}`);
@@ -97,6 +105,11 @@ export interface SpendSummary {
 }
 
 export const api = {
+  authStatus: () => request<{ enabled: boolean; authenticated: boolean }>("/auth/status"),
+  login: (password: string) =>
+    request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
+  logout: () => request<{ authenticated: boolean }>("/auth/logout", { method: "POST" }),
+
   pipelineStatus: () => request<{ stages: any[] }>("/pipeline/status"),
   pipelineEvents: (after: number) =>
     request<{ events: { id: number; stage: string; status: string; detail: string; at: string }[] }>(
