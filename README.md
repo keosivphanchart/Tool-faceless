@@ -248,18 +248,22 @@ so a missing/broken source never blocks the others.
       moment it happens.
 
 ### Module 6 — Publisher — `built` (YouTube + TikTok)
-- [x] YouTube Data API `videos.insert` + OAuth (installed-app flow, token cached)
+- [x] YouTube Data API `videos.insert` + OAuth (web flow, token cached)
 - [x] Quota-exceeded handling (`YouTubeQuotaExceeded`)
-- [x] TikTok Content Posting API v2 direct-post flow: interactive OAuth
-      (`python -m faceless_pipeline.modules.publisher.tiktok` once, to
-      authorize and cache a token), then init → upload → poll-status per
-      publish. **Apply for TikTok API access early** — posting to any
-      account beyond your own takes weeks of app review; your own
-      developer/test account can authorize and post immediately after
-      creating a sandbox app, which is what this is built and tested
-      against. Defaults to `SELF_ONLY` privacy (visible only to the
-      posting account) so an automated run can't accidentally post
-      publicly.
+- [x] TikTok Content Posting API v2 direct-post flow: OAuth, then init →
+      upload → poll-status per publish. **Apply for TikTok API access
+      early** — posting to any account beyond your own takes weeks of app
+      review; your own developer/test account can authorize and post
+      immediately after creating a sandbox app, which is what this is
+      built and tested against. Defaults to `SELF_ONLY` privacy (visible
+      only to the posting account) so an automated run can't accidentally
+      post publicly.
+- [x] Both accounts are connected from the dashboard's **Settings** page
+      ("Connect YouTube" / "Connect TikTok") once the app credentials
+      (`YOUTUBE_CLIENT_SECRETS_FILE`, `TIKTOK_CLIENT_KEY`/`_SECRET`) are
+      set in `.env` — no CLI step needed. Click Connect, approve in the
+      platform's consent screen, get redirected back with the account
+      authorized. Disconnect from the same page.
 - [x] `publish_video()` auto-publishes to every platform that's actually
       configured (YouTube always attempted; TikTok once both its app
       credentials and a cached token exist) instead of hardcoding just

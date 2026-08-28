@@ -193,3 +193,44 @@ def test_upload_video_without_client_credentials_raises_not_configured(tiktok_se
 
     with pytest.raises(tiktok.TikTokNotConfigured):
         tiktok.upload_video(video_path, title="t")
+
+
+def test_is_connected_reflects_token_file(tiktok_server):
+    assert tiktok.is_connected() is False
+    _seed_valid_token()
+    assert tiktok.is_connected() is True
+
+
+def test_disconnect_removes_token_file(tiktok_server):
+    _seed_valid_token()
+    tiktok.disconnect()
+    assert tiktok.is_connected() is False
+    tiktok.disconnect()  # missing_ok - disconnecting again is a no-op, not an error
+
+
+def test_build_authorize_url_uses_configured_redirect_uri(tiktok_server, monkeypatch):
+    monkeypatch.setattr(settings, "tiktok_redirect_uri", "http://localhost:8000/api/publish/accounts/tiktok/callback")
+
+    url = tiktok.build_authorize_url()
+
+    assert url.startswith(tiktok.AUTHORIZE_URL)
+    assert "client_key=test-client-key" in url
+    assert "redirect_uri=http://localhost:8000/api/publish/accounts/tiktok/callback" in url
+
+
+def test_build_authorize_url_without_credentials_raises(tiktok_server):
+    settings.tiktok_client_key = ""
+
+    with pytest.raises(tiktok.TikTokNotConfigured):
+        tiktok.build_authorize_url()
+
+
+def test_complete_authorization_exchanges_code_and_caches_token(tiktok_server):
+    tiktok.complete_authorization("some-code")
+
+    token = tiktok._load_token()
+    assert token["access_token"] == "refreshed-token"  # the fixture's oauth handler always returns this
+    exchange_calls = [r for r in tiktok_server.received if r["path"] == "/v2/oauth/token/"]
+    assert len(exchange_calls) == 1
+    assert "code=some-code" in exchange_calls[0]["form"]
+    assert "grant_type=authorization_code" in exchange_calls[0]["form"]

@@ -101,6 +101,14 @@ export const api = {
   performance: () => request<any[]>("/analytics/performance"),
   bestPerformers: () => request<{ by_style: any[]; by_topic: any[] }>("/analytics/best-performers"),
 
+  accountsStatus: () =>
+    request<{
+      youtube: { configured: boolean; connected: boolean };
+      tiktok: { configured: boolean; connected: boolean };
+    }>("/publish/accounts/status"),
+  disconnectYouTube: () => request("/publish/accounts/youtube/disconnect", { method: "POST" }),
+  disconnectTikTok: () => request("/publish/accounts/tiktok/disconnect", { method: "POST" }),
+
   settingsStatus: () =>
     request<{
       trend_seed_keywords: string[];

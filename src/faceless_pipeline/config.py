@@ -58,12 +58,16 @@ class Settings(BaseSettings):
     # Module 6: Publisher
     youtube_client_secrets_file: str = "./secrets/youtube_client_secret.json"
     youtube_token_file: str = "./secrets/youtube_token.json"
+    youtube_redirect_uri: str = "http://localhost:8000/api/publish/accounts/youtube/callback"
     tiktok_client_key: str = ""
     tiktok_client_secret: str = ""
     tiktok_api_base_url: str = "https://open.tiktokapis.com"
     tiktok_token_file: str = "./secrets/tiktok_token.json"
-    tiktok_redirect_uri: str = "http://localhost:8765/tiktok/callback"
+    tiktok_redirect_uri: str = "http://localhost:8000/api/publish/accounts/tiktok/callback"
     tiktok_default_privacy_level: str = "SELF_ONLY"  # safest default: visible only to the posting account
+    # Where the dashboard is served from - the connect flow redirects the
+    # browser back here (to /settings) once YouTube/TikTok OAuth finishes.
+    dashboard_url: str = "http://localhost:5173"
 
     # Module 8: Analytics
     youtube_analytics_token_file: str = "./secrets/youtube_analytics_token.json"
