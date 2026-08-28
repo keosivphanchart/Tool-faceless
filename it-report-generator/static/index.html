@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>IT Report Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  .card { border: 1px solid #8884; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 100px; text-align: center; padding: 0.75rem; border-radius: 8px; background: #8881; }
+  .stat b { display: block; font-size: 1.6rem; }
+  .healthy { color: #2e9e5b; }
+  .warning { color: #e0a72e; }
+  .critical { color: #d64545; }
+  ul { padding-left: 1.2rem; }
+  button { cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #8886; background: #8881; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  td, th { padding: 0.4rem; border-bottom: 1px solid #8883; text-align: left; }
+  #status { font-size: 0.85rem; opacity: 0.8; min-height: 1.2em; }
+</style>
+</head>
+<body>
+  <h1>IT Report Generator</h1>
+  <p>Upload a CSV or Excel file with one row per server (server, status, cpu, ram, disk).</p>
+
+  <div class="card">
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
+    <button id="analyzeBtn">Analyze</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="result" style="display:none">
+    <div class="card">
+      <h2>Infrastructure Summary</h2>
+      <div class="stats">
+        <div class="stat"><b id="totalServers">0</b>Total</div>
+        <div class="stat healthy"><b id="healthyCount">0</b>Healthy</div>
+        <div class="stat warning"><b id="warningCount">0</b>Warning</div>
+        <div class="stat critical"><b id="criticalCount">0</b>Critical</div>
+      </div>
+    </div>
+
+    <div class="card" id="criticalCard" style="display:none">
+      <h3>Critical Issues</h3>
+      <ul id="criticalList"></ul>
+    </div>
+
+    <div class="card" id="recCard" style="display:none">
+      <h3>Recommended Actions</h3>
+      <ul id="recList"></ul>
+    </div>
+
+    <div class="card">
+      <h3>Resource usage per server</h3>
+      <canvas id="usageChart" height="120"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Per-server detail</h3>
+      <table>
+        <thead><tr><th>Server</th><th>Status</th><th>CPU</th><th>RAM</th><th>Disk</th><th>Severity</th></tr></thead>
+        <tbody id="serverRows"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <button id="downloadBtn">Download PDF</button>
+      <button id="emailBtn">Send Email</button>
+      <button id="telegramBtn">Send Telegram</button>
+    </div>
+  </div>
+
+<script>
+let currentReportId = null;
+let chart = null;
+
+function setStatus(text) { document.getElementById("status").textContent = text; }
+
+function metric(v) { return v === null || v === undefined ? "-" : v.toFixed(0) + "%"; }
+
+function render(report) {
+  currentReportId = report.id;
+  document.getElementById("result").style.display = "block";
+  document.getElementById("totalServers").textContent = report.summary.total_servers;
+  document.getElementById("healthyCount").textContent = report.summary.healthy;
+  document.getElementById("warningCount").textContent = report.summary.warning;
+  document.getElementById("criticalCount").textContent = report.summary.critical;
+
+  const criticalCard = document.getElementById("criticalCard");
+  const criticalList = document.getElementById("criticalList");
+  criticalList.innerHTML = "";
+  report.critical_issues.forEach((issue) => {
+    const li = document.createElement("li");
+    li.textContent = issue;
+    criticalList.appendChild(li);
+  });
+  criticalCard.style.display = report.critical_issues.length ? "block" : "none";
+
+  const recCard = document.getElementById("recCard");
+  const recList = document.getElementById("recList");
+  recList.innerHTML = "";
+  report.recommendations.forEach((rec) => {
+    const li = document.createElement("li");
+    li.textContent = rec;
+    recList.appendChild(li);
+  });
+  recCard.style.display = report.recommendations.length ? "block" : "none";
+
+  const rows = document.getElementById("serverRows");
+  rows.innerHTML = "";
+  report.servers.forEach((s) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${s.name}</td><td>${s.status}</td><td>${metric(s.cpu)}</td><td>${metric(s.ram)}</td><td>${metric(s.disk)}</td><td class="${s.severity}">${s.severity}</td>`;
+    rows.appendChild(tr);
+  });
+
+  // Chart.js loads from a CDN - if that's ever unreachable, the rest of
+  // the page (summary, issues, table, PDF/delivery buttons) should still
+  // work, just without the in-browser preview chart.
+  try {
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById("usageChart"), {
+      type: "bar",
+      data: {
+        labels: report.servers.map((s) => s.name),
+        datasets: [
+          { label: "CPU %", data: report.servers.map((s) => s.cpu ?? 0), backgroundColor: "#4478c9" },
+          { label: "RAM %", data: report.servers.map((s) => s.ram ?? 0), backgroundColor: "#8a5fd6" },
+          { label: "Disk %", data: report.servers.map((s) => s.disk ?? 0), backgroundColor: "#d68a5f" },
+        ],
+      },
+      options: { scales: { y: { min: 0, max: 100 } } },
+    });
+  } catch (err) {
+    console.error("Chart.js unavailable, skipping preview chart:", err);
+  }
+}
+
+document.getElementById("analyzeBtn").addEventListener("click", async () => {
+  const input = document.getElementById("fileInput");
+  if (!input.files.length) { setStatus("Choose a file first."); return; }
+
+  setStatus("Analyzing...");
+  const formData = new FormData();
+  formData.append("file", input.files[0]);
+
+  try {
+    const res = await fetch("/api/analyze", { method: "POST", body: formData });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    render(await res.json());
+    setStatus("Done.");
+  } catch (err) {
+    setStatus("Error: " + err.message);
+  }
+});
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  if (currentReportId) window.location.href = `/api/reports/${currentReportId}/pdf`;
+});
+
+async function deliver(kind, endpoint) {
+  if (!currentReportId) return;
+  setStatus(`Sending ${kind}...`);
+  try {
+    const res = await fetch(`/api/reports/${currentReportId}/${endpoint}`, { method: "POST" });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    setStatus(`${kind} sent.`);
+  } catch (err) {
+    setStatus(`${kind} failed: ` + err.message);
+  }
+}
+
+document.getElementById("emailBtn").addEventListener("click", () => deliver("Email", "send-email"));
+document.getElementById("telegramBtn").addEventListener("click", () => deliver("Telegram", "send-telegram"));
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+server,status,cpu,ram,disk
+Server01,up,92,40,55
+Server02,up,35,50,60
+Server03,up,20,30,91
+Server04,down,,,
