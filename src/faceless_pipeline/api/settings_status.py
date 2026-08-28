@@ -7,6 +7,7 @@ requirements, and are never sent to the frontend.
 from pathlib import Path
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from faceless_pipeline.config import settings
 
@@ -19,6 +20,42 @@ _SCRIPT_MODEL_BY_PROVIDER = {
     "gemini": lambda: settings.gemini_model,
     "groq": lambda: settings.groq_model,
 }
+
+
+def _automation_status() -> dict:
+    return {
+        "auto_generate_enabled": settings.auto_generate_enabled,
+        "auto_trend_finder_enabled": settings.auto_trend_finder_enabled,
+        "auto_approve_enabled": settings.auto_approve_enabled,
+        "ab_test_enabled": settings.ab_test_enabled,
+        "digest_enabled": settings.digest_enabled,
+        "cleanup_enabled": settings.cleanup_enabled,
+        "daily_cost_budget_usd": settings.daily_cost_budget_usd,
+        "monthly_cost_budget_usd": settings.monthly_cost_budget_usd,
+    }
+
+
+class AutomationUpdate(BaseModel):
+    """Every field optional so a PATCH can flip just one switch. Only the
+    six *_enabled flags are settable here (not the budget/interval/count
+    numbers) - the loops that back them (main.py's lifespan) now check
+    these live every minute, so a change here takes effect without a
+    restart; the numeric knobs are lower-stakes to leave .env-only for
+    now."""
+
+    auto_generate_enabled: bool | None = None
+    auto_trend_finder_enabled: bool | None = None
+    auto_approve_enabled: bool | None = None
+    ab_test_enabled: bool | None = None
+    digest_enabled: bool | None = None
+    cleanup_enabled: bool | None = None
+
+
+@router.patch("/automation")
+def update_automation(payload: AutomationUpdate):
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(settings, field, value)
+    return _automation_status()
 
 
 @router.get("")
@@ -45,14 +82,5 @@ def settings_status():
             "tiktok_client_key": bool(settings.tiktok_client_key),
             "instagram_app_id": bool(settings.instagram_app_id),
         },
-        "automation": {
-            "auto_generate_enabled": settings.auto_generate_enabled,
-            "auto_trend_finder_enabled": settings.auto_trend_finder_enabled,
-            "auto_approve_enabled": settings.auto_approve_enabled,
-            "ab_test_enabled": settings.ab_test_enabled,
-            "digest_enabled": settings.digest_enabled,
-            "cleanup_enabled": settings.cleanup_enabled,
-            "daily_cost_budget_usd": settings.daily_cost_budget_usd,
-            "monthly_cost_budget_usd": settings.monthly_cost_budget_usd,
-        },
+        "automation": _automation_status(),
     }

@@ -139,6 +139,59 @@ function BulkActionBar({
   );
 }
 
+function EditScriptForm({
+  video,
+  onSaved,
+  onCancel,
+}: {
+  video: ReviewVideo;
+  onSaved: (v: ReviewVideo) => void;
+  onCancel: () => void;
+}) {
+  const { notify } = useToast();
+  const [hook, setHook] = useState(video.script.text.hook);
+  const [promise, setPromise] = useState(video.script.text.promise);
+  const [body, setBody] = useState(video.script.text.body);
+  const [payoff, setPayoff] = useState(video.script.text.payoff);
+  const [cta, setCta] = useState(video.script.text.cta);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const updated = await api.editScript(video.id, { hook, promise, body, payoff, cta });
+      notify(
+        "success",
+        "Script text updated",
+        'This only changes the text — click "Regenerate video" below to re-render with it.'
+      );
+      onSaved(updated);
+    } catch (err) {
+      notify("error", "Could not save", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 space-y-2 text-sm">
+      <NeuTextarea className="w-full" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="Hook" rows={2} />
+      <NeuTextarea className="w-full" value={promise} onChange={(e) => setPromise(e.target.value)} placeholder="Promise" rows={2} />
+      <NeuTextarea className="w-full" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Body" rows={3} />
+      <NeuTextarea className="w-full" value={payoff} onChange={(e) => setPayoff(e.target.value)} placeholder="Payoff" rows={2} />
+      <NeuTextarea className="w-full" value={cta} onChange={(e) => setCta(e.target.value)} placeholder="CTA" rows={2} />
+      <div className="flex gap-2">
+        <NeuButton variant="primary" loading={saving} onClick={save}>
+          Save
+        </NeuButton>
+        <NeuButton disabled={saving} onClick={onCancel}>
+          Cancel
+        </NeuButton>
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewQueue() {
   const [videos, setVideos] = useState<ReviewVideo[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
@@ -146,6 +199,7 @@ export default function ReviewQueue() {
   const [regenerating, setRegenerating] = useState<Set<number>>(new Set());
   const [actionBusy, setActionBusy] = useState<Record<number, Action | undefined>>({});
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [editingScriptId, setEditingScriptId] = useState<number | null>(null);
   const { notify } = useToast();
 
   const load = () => api.listPendingVideos().then(setVideos);
@@ -303,21 +357,40 @@ export default function ReviewQueue() {
                 </div>
               )}
 
-              <div className="flex-1 space-y-1 text-sm">
-                <p className="font-medium">{v.script.topic}</p>
-                <p>
-                  <span className="text-neu-muted">Hook: </span>
-                  {v.script.text.hook}
-                </p>
-                <p>
-                  <span className="text-neu-muted">Body: </span>
-                  {v.script.text.body}
-                </p>
-                <p>
-                  <span className="text-neu-muted">CTA: </span>
-                  {v.script.text.cta}
-                </p>
-              </div>
+              {editingScriptId === v.id ? (
+                <EditScriptForm
+                  video={v}
+                  onSaved={(updated) => {
+                    setVideos((prev) => prev.map((x) => (x.id === v.id ? updated : x)));
+                    setEditingScriptId(null);
+                  }}
+                  onCancel={() => setEditingScriptId(null)}
+                />
+              ) : (
+                <div className="flex-1 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">{v.script.topic}</p>
+                    <button
+                      className="text-xs text-neu-accent hover:underline"
+                      onClick={() => setEditingScriptId(v.id)}
+                    >
+                      Edit script
+                    </button>
+                  </div>
+                  <p>
+                    <span className="text-neu-muted">Hook: </span>
+                    {v.script.text.hook}
+                  </p>
+                  <p>
+                    <span className="text-neu-muted">Body: </span>
+                    {v.script.text.body}
+                  </p>
+                  <p>
+                    <span className="text-neu-muted">CTA: </span>
+                    {v.script.text.cta}
+                  </p>
+                </div>
+              )}
             </div>
 
             {v.script.text.storyboard && <StoryboardStrip shots={v.script.text.storyboard} />}

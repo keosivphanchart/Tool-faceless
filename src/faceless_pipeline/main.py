@@ -31,21 +31,20 @@ async def lifespan(app: FastAPI):
             "dev, never for anything reachable beyond localhost."
         )
 
-    # publisher.scheduler's loop (dispatching per-video scheduled
-    # publishes) and publisher.recurring's loop (dispatching recurring
-    # posting slots) always run - both are the execution side of a
-    # feature that's always available, not itself opt-in (an empty slot
-    # list just makes recurring's loop a no-op tick). Everything else
-    # here is genuinely opt-in automation, off unless its setting says
-    # otherwise.
-    tasks = [asyncio.create_task(run_scheduler_loop()), asyncio.create_task(run_recurring_posting_loop())]
-    if settings.auto_trend_finder_enabled:
-        tasks.append(asyncio.create_task(run_recurring_automation_loop()))
-    tasks.append(asyncio.create_task(run_health_check_loop()))  # read-only, no cost - always safe to run
-    if settings.digest_enabled:
-        tasks.append(asyncio.create_task(run_digest_loop()))
-    if settings.cleanup_enabled:
-        tasks.append(asyncio.create_task(run_cleanup_loop()))
+    # Every automation loop always runs now, each checking its own
+    # *_enabled setting live on every tick (60s) instead of only once at
+    # startup - so toggling any of them from the Settings page takes
+    # effect within a minute, no restart required. An automation that's
+    # off just makes its loop a no-op tick, same as an empty recurring
+    # posting-slot list already did before this.
+    tasks = [
+        asyncio.create_task(run_scheduler_loop()),
+        asyncio.create_task(run_recurring_posting_loop()),
+        asyncio.create_task(run_recurring_automation_loop()),
+        asyncio.create_task(run_health_check_loop()),  # read-only, no cost - always safe to run
+        asyncio.create_task(run_digest_loop()),
+        asyncio.create_task(run_cleanup_loop()),
+    ]
 
     yield
 

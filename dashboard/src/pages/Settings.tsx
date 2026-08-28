@@ -1,7 +1,78 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, AutomationStatus } from "../api";
 import { NeuBadge, NeuButton, NeuCard, NeuToggle } from "../components/Neu";
 import { useToast } from "../components/Toasts";
+
+type AutomationFlag = keyof Pick<
+  AutomationStatus,
+  "auto_generate_enabled" | "auto_trend_finder_enabled" | "auto_approve_enabled" | "ab_test_enabled" | "digest_enabled" | "cleanup_enabled"
+>;
+
+const AUTOMATION_FIELDS: { key: AutomationFlag; label: string; help: string }[] = [
+  { key: "auto_trend_finder_enabled", label: "Auto trend finder", help: "Runs the trend finder on a fixed interval instead of only when triggered manually." },
+  { key: "auto_generate_enabled", label: "Auto generate", help: "Auto-generates a script + video for top unused trends every trend-finder run." },
+  { key: "auto_approve_enabled", label: "Auto approve", help: "Skips the human review click for a video that passes basic safety checks." },
+  { key: "ab_test_enabled", label: "A/B style testing", help: "Biases new scripts toward whichever style has historically performed best." },
+  { key: "digest_enabled", label: "Periodic digest", help: "Sends a rollup summary to Telegram/Discord instead of only per-video pings." },
+  { key: "cleanup_enabled", label: "Auto cleanup", help: "Purges rejected videos and superseded scripts past the retention window." },
+];
+
+function AutomationCard({
+  automation,
+  setAutomation,
+}: {
+  automation: AutomationStatus;
+  setAutomation: (a: AutomationStatus) => void;
+}) {
+  const { notify } = useToast();
+  const [busy, setBusy] = useState<AutomationFlag | null>(null);
+
+  async function toggle(key: AutomationFlag) {
+    setBusy(key);
+    try {
+      const updated = await api.updateAutomation({ [key]: !automation[key] });
+      setAutomation(updated);
+    } catch (err) {
+      notify("error", "Could not update automation setting", err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <NeuCard>
+      <h3 className="text-sm font-medium text-neu-muted mb-1">Automation</h3>
+      <p className="text-xs text-neu-muted mb-3">
+        Takes effect within a minute, no restart needed — every switch here is checked live by its background loop.
+      </p>
+      <table className="w-full text-sm">
+        <tbody className="divide-y divide-neu-shadowDark/60">
+          {AUTOMATION_FIELDS.map((field) => (
+            <tr key={field.key}>
+              <td className="py-2">
+                <p>{field.label}</p>
+                <p className="text-xs text-neu-muted">{field.help}</p>
+              </td>
+              <td className="py-2 text-right">
+                <button disabled={busy === field.key} onClick={() => toggle(field.key)}>
+                  <NeuToggle on={automation[field.key]} label={automation[field.key] ? "on" : "off"} />
+                </button>
+              </td>
+            </tr>
+          ))}
+          <tr>
+            <td className="py-2">Daily / monthly LLM budget</td>
+            <td className="py-2 text-right text-neu-muted">
+              {automation.daily_cost_budget_usd > 0 ? `$${automation.daily_cost_budget_usd}/day` : "unlimited"}
+              {" · "}
+              {automation.monthly_cost_budget_usd > 0 ? `$${automation.monthly_cost_budget_usd}/mo` : "unlimited"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </NeuCard>
+  );
+}
 
 const PLATFORM_LABEL = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram" } as const;
 type Platform = keyof typeof PLATFORM_LABEL;
@@ -172,40 +243,10 @@ export default function Settings() {
         </table>
       </NeuCard>
 
-      <NeuCard>
-        <h3 className="text-sm font-medium text-neu-muted mb-3">
-          Automation — all opt-in, set in <code className="text-neu-text">.env</code>
-        </h3>
-        <table className="w-full text-sm">
-          <tbody className="divide-y divide-neu-shadowDark/60">
-            {[
-              ["AUTO_GENERATE_ENABLED", status.automation.auto_generate_enabled],
-              ["AUTO_TREND_FINDER_ENABLED", status.automation.auto_trend_finder_enabled],
-              ["AUTO_APPROVE_ENABLED", status.automation.auto_approve_enabled],
-              ["AB_TEST_ENABLED", status.automation.ab_test_enabled],
-              ["DIGEST_ENABLED", status.automation.digest_enabled],
-              ["CLEANUP_ENABLED", status.automation.cleanup_enabled],
-            ].map(([key, on]) => (
-              <tr key={key as string}>
-                <td className="py-2">{key}</td>
-                <td className="py-2">
-                  <NeuToggle on={on as boolean} label={on ? "on" : "off"} />
-                </td>
-              </tr>
-            ))}
-            <tr>
-              <td className="py-2">Daily / monthly LLM budget</td>
-              <td className="py-2 text-neu-muted">
-                {status.automation.daily_cost_budget_usd > 0 ? `$${status.automation.daily_cost_budget_usd}/day` : "unlimited"}
-                {" · "}
-                {status.automation.monthly_cost_budget_usd > 0
-                  ? `$${status.automation.monthly_cost_budget_usd}/mo`
-                  : "unlimited"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </NeuCard>
+      <AutomationCard
+        automation={status.automation}
+        setAutomation={(automation) => setStatus({ ...status, automation })}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ explicitly turned on.
 """
 import asyncio
 import logging
+from datetime import datetime, timedelta
 
 from faceless_pipeline.config import settings
 
@@ -47,15 +48,37 @@ def run_recurring_cycle() -> None:
         db.close()
 
 
+CHECK_INTERVAL_SECONDS = 60
+
+
+def recurring_cycle_due(last_run: datetime, now: datetime) -> bool:
+    """Reads settings.auto_trend_finder_enabled/_interval_hours fresh on
+    every call (not captured once at loop start), which is what makes
+    both settable live from the dashboard without a restart."""
+    if not settings.auto_trend_finder_enabled:
+        return False
+    interval = timedelta(hours=max(settings.auto_trend_finder_interval_hours, 1))
+    return now - last_run >= interval
+
+
 async def run_recurring_automation_loop() -> None:
-    interval_seconds = max(settings.auto_trend_finder_interval_hours, 1) * 3600
+    """Always runs (like publisher/scheduler.py's dispatcher) so flipping
+    AUTO_TREND_FINDER_ENABLED (and AUTO_GENERATE_ENABLED, checked inside
+    run_recurring_cycle) from the dashboard takes effect without a
+    restart. Polls every minute rather than sleeping a full
+    AUTO_TREND_FINDER_INTERVAL_HOURS so a changed interval is also picked
+    up live. last_run starts at "now", not unset: a server restart
+    (deploy, crash recovery) shouldn't itself trigger a fresh cycle -
+    especially with AUTO_GENERATE_ENABLED on, where that cycle spends
+    real LLM API calls. Worst case a slow-to-restart deployment delays
+    one cycle by up to the interval, the safer failure mode.
+    """
+    last_run = datetime.utcnow()
     while True:
-        # Sleep first, not run-then-sleep: a server restart (deploy, crash
-        # recovery) shouldn't itself trigger a fresh cycle - especially
-        # with AUTO_GENERATE_ENABLED on, where that cycle spends real LLM
-        # API calls. Worst case a slow-to-restart deployment delays one
-        # cycle by up to the interval, which is the safer failure mode.
-        await asyncio.sleep(interval_seconds)
+        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+        if not recurring_cycle_due(last_run, datetime.utcnow()):
+            continue
+        last_run = datetime.utcnow()
         try:
             await asyncio.to_thread(run_recurring_cycle)
         except Exception:

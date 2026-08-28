@@ -94,6 +94,17 @@ export interface PerformanceRow {
   pulled_at: string;
 }
 
+export interface AutomationStatus {
+  auto_generate_enabled: boolean;
+  auto_trend_finder_enabled: boolean;
+  auto_approve_enabled: boolean;
+  ab_test_enabled: boolean;
+  digest_enabled: boolean;
+  cleanup_enabled: boolean;
+  daily_cost_budget_usd: number;
+  monthly_cost_budget_usd: number;
+}
+
 export interface SpendSummary {
   daily_spend_usd: number;
   daily_budget_usd: number;
@@ -127,6 +138,15 @@ export const api = {
   listScripts: (topic?: string) => request<ScriptRecord[]>(`/scripts${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
 
   listPendingVideos: () => request<ReviewVideo[]>("/videos?status=pending"),
+  // Approved videos whose scheduled_for is more than 15 minutes overdue
+  // - the scheduler retries a failed publish forever, silently, so this
+  // is the only place a stuck one becomes visible.
+  needsAttention: () => request<ReviewVideo[]>("/videos/needs-attention"),
+  // Text-only fix (hook/promise/body/payoff/cta) - does NOT re-render
+  // the video; pair with "Regenerate video" to bake the change into a
+  // fresh render without spending an LLM call on a full script rewrite.
+  editScript: (id: number, fields: Partial<{ hook: string; promise: string; body: string; payoff: string; cta: string }>) =>
+    request<ReviewVideo>(`/videos/${id}/script`, { method: "PATCH", body: JSON.stringify(fields) }),
   // scheduledFor: an ISO datetime string in the future — publish_video()
   // then just stores it and returns instead of publishing immediately;
   // the scheduler loop (started from main.py's lifespan) picks it up
@@ -191,15 +211,19 @@ export const api = {
       script_provider: string;
       script_model: string;
       credentials_configured: Record<string, boolean>;
-      automation: {
-        auto_generate_enabled: boolean;
-        auto_trend_finder_enabled: boolean;
-        auto_approve_enabled: boolean;
-        ab_test_enabled: boolean;
-        digest_enabled: boolean;
-        cleanup_enabled: boolean;
-        daily_cost_budget_usd: number;
-        monthly_cost_budget_usd: number;
-      };
+      automation: AutomationStatus;
     }>("/settings"),
+  // Every *_enabled flag here is live: main.py's automation loops
+  // re-check their own setting every minute, so this takes effect
+  // without a restart. The budget numbers aren't settable here.
+  updateAutomation: (
+    patch: Partial<{
+      auto_generate_enabled: boolean;
+      auto_trend_finder_enabled: boolean;
+      auto_approve_enabled: boolean;
+      ab_test_enabled: boolean;
+      digest_enabled: boolean;
+      cleanup_enabled: boolean;
+    }>
+  ) => request<AutomationStatus>("/settings/automation", { method: "PATCH", body: JSON.stringify(patch) }),
 };
